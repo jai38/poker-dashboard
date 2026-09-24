@@ -3,12 +3,14 @@ import { useLedger } from '../../lib/store/ledgerStore'
 import { formatINR, formatDateTime } from '../../lib/accounting/formatters'
 import { RecordSettlementModal } from './RecordSettlementModal'
 import { EditOwnersModal } from './EditOwnersModal'
-import { Scale, CheckCircle2, AlertCircle, PlusCircle, ArrowRight, Users } from 'lucide-react'
+import { AddBucketTransferModal } from './AddBucketTransferModal'
+import { Scale, CheckCircle2, AlertCircle, PlusCircle, ArrowRight, Users, ArrowRightLeft } from 'lucide-react'
 
 export const OwnerSettlementView: React.FC = () => {
   const { owners, summary, settlements } = useLedger()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isEditOwnersOpen, setIsEditOwnersOpen] = useState(false)
+  const [isTransferOpen, setIsTransferOpen] = useState(false)
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | undefined>(undefined)
 
   const handleOpenForOwner = (ownerId?: string) => {
@@ -32,7 +34,15 @@ export const OwnerSettlementView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => setIsTransferOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 shadow-sm transition-colors"
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Reallocate / Transfer Funds</span>
+          </button>
+
           <button
             onClick={() => setIsEditOwnersOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-sm transition-colors"
@@ -251,6 +261,13 @@ export const OwnerSettlementView: React.FC = () => {
         <EditOwnersModal
           isOpen={isEditOwnersOpen}
           onClose={() => setIsEditOwnersOpen(false)}
+        />
+      )}
+
+      {isTransferOpen && (
+        <AddBucketTransferModal
+          isOpen={isTransferOpen}
+          onClose={() => setIsTransferOpen(false)}
         />
       )}
     </div>

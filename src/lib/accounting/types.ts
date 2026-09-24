@@ -21,6 +21,12 @@ export interface SessionExpense {
   category?: string
 }
 
+export interface CustomGameAllocation {
+  tableRecoveryPaise: number
+  festivalFundPaise: number
+  distributableProfitPaise: number
+}
+
 export interface GameRecord {
   id: string
   gameNumber: number
@@ -30,6 +36,18 @@ export interface GameRecord {
   owners: OwnerAttendance[]
   status: 'active' | 'voided'
   notes?: string
+  voidReason?: string
+  customAllocation?: CustomGameAllocation
+}
+
+export interface BucketTransfer {
+  id: string
+  transferredAt: string | Date
+  fromBucket: 'table_recovery' | 'festival_fund'
+  toBucket: 'table_recovery' | 'festival_fund' | 'owner_profit'
+  amountPaise: number
+  notes?: string
+  status: 'active' | 'voided'
   voidReason?: string
 }
 
@@ -157,4 +175,5 @@ export interface LedgerSummary {
   reconciled: boolean
   reconciliationDiffPaise: number
   gameResults: GameCalculationResult[]
+  transfers: BucketTransfer[]
 }

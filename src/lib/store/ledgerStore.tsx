@@ -15,6 +15,8 @@ import {
   OwnerSettlement,
   PlayerPayment,
   SessionExpense,
+  BucketTransfer,
+  CustomGameAllocation,
 } from '../accounting/types'
 import {
   INITIAL_OWNERS,
@@ -45,6 +47,7 @@ interface LedgerContextType {
   payments: PlayerPayment[]
   expenses: GeneralExpense[]
   settlements: OwnerSettlement[]
+  transfers: BucketTransfer[]
   settings: AccountingSettings
   auditLog: AuditLogEntry[]
   summary: LedgerSummary
@@ -60,6 +63,7 @@ interface LedgerContextType {
     expenses: SessionExpense[]
     owners: OwnerAttendance[]
     notes?: string
+    customAllocation?: CustomGameAllocation
   }) => Promise<GameRecord>
 
   voidGame: (gameId: string, reason: string) => Promise<void>
@@ -99,10 +103,21 @@ interface LedgerContextType {
     notes?: string
   }) => Promise<OwnerSettlement>
 
+  addBucketTransfer: (data: {
+    fromBucket: 'table_recovery' | 'festival_fund'
+    toBucket: 'table_recovery' | 'festival_fund' | 'owner_profit'
+    amountPaise: number
+    notes?: string
+    transferredAt?: string
+  }) => Promise<BucketTransfer>
+
+  voidBucketTransfer: (transferId: string, reason: string) => Promise<void>
+
   updateSettings: (newSettings: Partial<AccountingSettings>, reason?: string) => Promise<void>
   updateOwner: (ownerId: string, newName: string) => Promise<void>
   updateOwners: (updatedOwners: { id: string; name: string }[]) => Promise<void>
   resetToInitialSeed: () => void
+  clearDatabase: () => void
   exportCSV: (type: 'summary' | 'players' | 'games' | 'payments' | 'expenses' | 'settlements') => void
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
@@ -162,6 +177,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [payments, setPayments] = useState<PlayerPayment[]>([])
   const [expenses, setExpenses] = useState<GeneralExpense[]>([])
   const [settlements, setSettlements] = useState<OwnerSettlement[]>([])
+  const [transfers, setTransfers] = useState<BucketTransfer[]>([])
   const [settings, setSettings] = useState<AccountingSettings>(DEFAULT_ACCOUNTING_SETTINGS)
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -196,6 +212,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setPayments(parsed.payments || [])
           setExpenses(parsed.expenses || [])
           setSettlements(parsed.settlements || [])
+          setTransfers(parsed.transfers || [])
           setSettings(parsed.settings || DEFAULT_ACCOUNTING_SETTINGS)
           setAuditLog(parsed.auditLog || [])
         } catch (err) {
@@ -221,6 +238,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setPayments(seed.payments)
     setExpenses(seed.expenses)
     setSettlements(seed.settlements)
+    setTransfers([])
     setSettings(seed.settings)
     setAuditLog(seed.auditLog)
     persist({
@@ -231,6 +249,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       payments: seed.payments,
       expenses: seed.expenses,
       settlements: seed.settlements,
+      transfers: [],
       settings: seed.settings,
       auditLog: seed.auditLog,
     })
@@ -244,6 +263,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     payments?: PlayerPayment[]
     expenses?: GeneralExpense[]
     settlements?: OwnerSettlement[]
+    transfers?: BucketTransfer[]
     settings?: AccountingSettings
     auditLog?: AuditLogEntry[]
   }) {
@@ -255,6 +275,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       payments: data.payments ?? payments,
       expenses: data.expenses ?? expenses,
       settlements: data.settlements ?? settlements,
+      transfers: data.transfers ?? transfers,
       settings: data.settings ?? settings,
       auditLog: data.auditLog ?? auditLog,
     }
@@ -283,6 +304,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     payments,
     expenses,
     settlements,
+    bucketTransfers: transfers,
     settings,
   })
 
@@ -293,6 +315,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     expenses: SessionExpense[]
     owners: OwnerAttendance[]
     notes?: string
+    customAllocation?: CustomGameAllocation
   }): Promise<GameRecord> {
     if (data.grossRakePaise < 0) {
       throw new Error('Gross rake cannot be negative.')
@@ -309,6 +332,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       owners: data.owners,
       status: 'active',
       notes: data.notes,
+      customAllocation: data.customAllocation,
     }
 
     const updatedGames = [...games, newGame]
@@ -320,6 +344,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       grossRakePaise: newGame.grossRakePaise,
       expensesCount: data.expenses.length,
       ownersPresent: data.owners.filter((o) => o.present).map((o) => o.ownerId),
+      customAllocation: data.customAllocation,
     })
 
     return newGame
@@ -646,10 +671,119 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     })
   }
 
+  // 10c. Reallocate / Transfer Funds Between Buckets
+  async function addBucketTransfer(data: {
+    fromBucket: 'table_recovery' | 'festival_fund'
+    toBucket: 'table_recovery' | 'festival_fund' | 'owner_profit'
+    amountPaise: number
+    notes?: string
+    transferredAt?: string
+  }): Promise<BucketTransfer> {
+    if (data.amountPaise <= 0) {
+      throw new Error('Transfer amount must be greater than zero.')
+    }
+    if (data.fromBucket === data.toBucket) {
+      throw new Error('Source and destination buckets must be different.')
+    }
+
+    const currentTable = summary.tableRecoveryAccumulatedPaise
+    const currentFestival = summary.festivalFundAccumulatedPaise
+
+    if (data.fromBucket === 'table_recovery' && data.amountPaise > currentTable) {
+      throw new Error(
+        `Cannot transfer ₹${(data.amountPaise / 100).toLocaleString('en-IN')}: Current Table Recovery balance is ₹${(currentTable / 100).toLocaleString('en-IN')}.`
+      )
+    }
+    if (data.fromBucket === 'festival_fund' && data.amountPaise > currentFestival) {
+      throw new Error(
+        `Cannot transfer ₹${(data.amountPaise / 100).toLocaleString('en-IN')}: Current Festival Fund balance is ₹${(currentFestival / 100).toLocaleString('en-IN')}.`
+      )
+    }
+
+    const newTransfer: BucketTransfer = {
+      id: `transfer-${Date.now()}`,
+      transferredAt: data.transferredAt || new Date().toISOString(),
+      fromBucket: data.fromBucket,
+      toBucket: data.toBucket,
+      amountPaise: data.amountPaise,
+      notes: data.notes,
+      status: 'active',
+    }
+
+    const updatedTransfers = [...transfers, newTransfer]
+    setTransfers(updatedTransfers)
+    persist({ transfers: updatedTransfers })
+
+    addAudit('BUCKET_FUNDS_REALLOCATED', 'bucket_transfer', newTransfer.id, {
+      fromBucket: data.fromBucket,
+      toBucket: data.toBucket,
+      amountPaise: data.amountPaise,
+      notes: data.notes,
+    })
+
+    return newTransfer
+  }
+
+  // 10d. Void Bucket Transfer
+  async function voidBucketTransfer(transferId: string, reason: string): Promise<void> {
+    if (!reason || reason.trim() === '') {
+      throw new Error('A reason is strictly required to void a transfer.')
+    }
+    const target = transfers.find((t) => t.id === transferId)
+    if (!target) throw new Error('Transfer record not found.')
+    if (target.status === 'voided') throw new Error('Transfer is already voided.')
+
+    const updated = transfers.map((t) =>
+      t.id === transferId ? { ...t, status: 'voided' as const, voidReason: reason } : t
+    )
+    setTransfers(updated)
+    persist({ transfers: updated })
+
+    addAudit('BUCKET_TRANSFER_VOIDED', 'bucket_transfer', transferId, {
+      amountPaise: target.amountPaise,
+      reason,
+    })
+  }
+
   // 11. Reset to initial seed
   function resetToInitialSeed() {
     const seed = generateInitialSeedState()
     applySeedState(seed)
+  }
+
+  // 11b. Clear Database to Start Fresh from Scratch
+  function clearDatabase() {
+    setPlayers([])
+    setGames([])
+    setHistoricalRake([])
+    setPayments([])
+    setExpenses([])
+    setSettlements([])
+    setTransfers([])
+
+    const clearedAudit: AuditLogEntry = {
+      id: `audit-clear-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      action: 'DATABASE_CLEARED',
+      entityType: 'ledger',
+      metadata: { reason: 'User cleared ledger to start completely fresh from scratch' },
+    }
+    setAuditLog([clearedAudit])
+
+    const cleared = {
+      owners,
+      players: [],
+      games: [],
+      historicalRake: [],
+      payments: [],
+      expenses: [],
+      settlements: [],
+      transfers: [],
+      settings,
+      auditLog: [clearedAudit],
+      isCleared: true,
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cleared))
   }
 
   // 12. CSV Export
@@ -753,6 +887,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         payments,
         expenses,
         settlements,
+        transfers,
         settings,
         auditLog,
         summary,
@@ -768,10 +903,13 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addExpense,
         voidExpense,
         recordOwnerSettlement,
+        addBucketTransfer,
+        voidBucketTransfer,
         updateSettings,
         updateOwner,
         updateOwners,
         resetToInitialSeed,
+        clearDatabase,
         exportCSV,
         signIn,
         signOut,

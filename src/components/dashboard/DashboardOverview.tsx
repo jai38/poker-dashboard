@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   TrendingUp,
   Wallet,
@@ -10,10 +10,12 @@ import {
   AlertCircle,
   Users,
   Dices,
+  ArrowRightLeft,
 } from 'lucide-react'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { formatINR, formatDate } from '../../lib/accounting/formatters'
 import { StatCard } from '../common/StatCard'
+import { AddBucketTransferModal } from '../settlements/AddBucketTransferModal'
 
 interface DashboardOverviewProps {
   onNavigateToGames: () => void
@@ -31,6 +33,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onOpenQuickRake,
 }) => {
   const { summary, owners, games, historicalRake } = useLedger()
+  const [isTransferOpen, setIsTransferOpen] = useState(false)
 
   const tablePercent = Math.min(
     100,
@@ -75,7 +78,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            onClick={() => setIsTransferOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition-colors"
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Reallocate Funds</span>
+          </button>
           <button
             onClick={onOpenQuickRake}
             className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
@@ -437,16 +447,23 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-            <span>Historical Rake Seeded: {formatINR(52650 * 100)}</span>
+            <span>Historical Rake Entries: {historicalRake.length}</span>
             <button
               onClick={onNavigateToPlayers}
               className="text-indigo-400 hover:text-indigo-300 font-semibold"
             >
-              View 16 Players →
+              View Players →
             </button>
           </div>
         </div>
       </div>
+
+      {isTransferOpen && (
+        <AddBucketTransferModal
+          isOpen={isTransferOpen}
+          onClose={() => setIsTransferOpen(false)}
+        />
+      )}
     </div>
   )
 }

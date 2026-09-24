@@ -474,5 +474,85 @@ describe('Pure Accounting Engine Specification Tests', () => {
     expect(o1.remainingEntitlementPaise).toBe(o1.grossEntitlementPaise - 500 * 100)
     expect(summary.totalOwnerSettledPaise).toBe(500 * 100)
   })
+
+  // Test 21: Custom game allocation directly routes funds to selected buckets
+  it('Test 21: Custom game allocation allocates exact specified amounts to buckets', () => {
+    const games: GameRecord[] = [
+      {
+        id: 'g-custom-1',
+        gameNumber: 1,
+        playedAt: '2026-09-25T10:00:00Z',
+        grossRakePaise: 10000 * 100, // ₹10,000
+        expenses: [],
+        owners: defaultOwners,
+        status: 'active',
+        customAllocation: {
+          tableRecoveryPaise: 2000 * 100, // ₹2,000 to table
+          festivalFundPaise: 3000 * 100,  // ₹3,000 to festival
+          distributableProfitPaise: 5000 * 100, // ₹5,000 directly to profit
+        },
+      },
+    ]
+
+    const summary = calculateLedgerSummary({
+      owners: mockOwnerDefs,
+      games,
+      historicalRake: [],
+      payments: [],
+      expenses: [],
+      settlements: [],
+    })
+
+    expect(summary.tableRecoveryAccumulatedPaise).toBe(2000 * 100)
+    expect(summary.festivalFundAccumulatedPaise).toBe(3000 * 100)
+    expect(summary.totalDistributableRakePaise).toBe(5000 * 100)
+    expect(summary.reconciled).toBe(true)
+  })
+
+  // Test 22: Bucket transfer reallocates from Table Recovery to Owner Profit
+  it('Test 22: Bucket transfer moves funds from table recovery to owner profit equally', () => {
+    const historicalRake = [
+      {
+        id: 'h1',
+        playerId: 'p1',
+        amountPaise: 50000 * 100, // ₹50,000 into table recovery
+        entryDate: '2026-09-01T00:00:00Z',
+        status: 'active' as const,
+      },
+    ]
+
+    const bucketTransfers = [
+      {
+        id: 'bt-1',
+        transferredAt: '2026-09-02T00:00:00Z',
+        fromBucket: 'table_recovery' as const,
+        toBucket: 'owner_profit' as const,
+        amountPaise: 10000 * 100, // Move ₹10,000 from table to profit
+        status: 'active' as const,
+      },
+    ]
+
+    const summary = calculateLedgerSummary({
+      owners: mockOwnerDefs,
+      games: [],
+      historicalRake,
+      payments: [],
+      expenses: [],
+      settlements: [],
+      bucketTransfers,
+    })
+
+    // Table recovery should now be ₹40,000 (₹50k - ₹10k)
+    expect(summary.tableRecoveryAccumulatedPaise).toBe(40000 * 100)
+    // Distributable profit should be ₹10,000
+    expect(summary.totalDistributableRakePaise).toBe(10000 * 100)
+    // Each of the 4 owners receives ₹2,500
+    expect(summary.ownerEntitlements['o1'].grossEntitlementPaise).toBe(2500 * 100)
+    expect(summary.ownerEntitlements['o2'].grossEntitlementPaise).toBe(2500 * 100)
+    expect(summary.ownerEntitlements['o3'].grossEntitlementPaise).toBe(2500 * 100)
+    expect(summary.ownerEntitlements['o4'].grossEntitlementPaise).toBe(2500 * 100)
+    expect(summary.reconciled).toBe(true)
+  })
 })
+
 

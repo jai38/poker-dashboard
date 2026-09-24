@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { parseRupeesToPaise } from '../../lib/accounting/formatters'
 import { ConfirmDialog } from '../common/ConfirmDialog'
-import { Settings, ShieldAlert, RotateCcw, Save, AlertTriangle, Users, CheckCircle2 } from 'lucide-react'
+import { Settings, ShieldAlert, RotateCcw, Save, AlertTriangle, Users, CheckCircle2, Trash2 } from 'lucide-react'
 
 export const SettingsView: React.FC = () => {
-  const { settings, owners, updateSettings, updateOwners, resetToInitialSeed } = useLedger()
+  const { settings, owners, updateSettings, updateOwners, resetToInitialSeed, clearDatabase } = useLedger()
 
   const [tableTargetRupees, setTableTargetRupees] = useState(
     (settings.tableRecoveryTargetPaise / 100).toString()
@@ -34,6 +34,7 @@ export const SettingsView: React.FC = () => {
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false)
   const [pendingSettings, setPendingSettings] = useState<any | null>(null)
   const [settingsSuccessMsg, setSettingsSuccessMsg] = useState<string | null>(null)
   const [ownersSuccessMsg, setOwnersSuccessMsg] = useState<string | null>(null)
@@ -87,6 +88,12 @@ export const SettingsView: React.FC = () => {
     setTimeout(() => setSettingsSuccessMsg(null), 4000)
   }
 
+  const handleClearConfirm = () => {
+    clearDatabase()
+    setSettingsSuccessMsg('Database completely cleared to ₹0. All players, games, payments, and expenses reset.')
+    setTimeout(() => setSettingsSuccessMsg(null), 4000)
+  }
+
   return (
     <div className="space-y-8 max-w-4xl animate-in fade-in duration-200">
       {/* Header */}
@@ -96,7 +103,7 @@ export const SettingsView: React.FC = () => {
           <span>Accounting & Ledger Configuration</span>
         </h2>
         <p className="text-xs text-slate-400 mt-1">
-          Configure table owner partner names and core financial waterfall targets.
+          Configure table owner partner names, core financial waterfall targets, and database state.
         </p>
       </div>
 
@@ -282,23 +289,50 @@ export const SettingsView: React.FC = () => {
         </form>
       </div>
 
-      {/* 3. Dangerous Zone / Reset */}
-      <div className="bg-slate-900 border border-rose-900/40 rounded-xl p-6 space-y-3">
-        <h3 className="text-sm font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4" />
-          <span>Reset Ledger to Initial Known State</span>
-        </h3>
-        <p className="text-xs text-slate-400 leading-relaxed">
-          Resets the ledger back to the initial state defined in Section 38 & 39: 16 players with ₹52,650 historical rake, ₹12,350 table recovery remaining, and ₹0 owner profit distribution.
-        </p>
-        <button
-          type="button"
-          onClick={() => setIsResetConfirmOpen(true)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 border border-rose-500/20 transition-colors"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Reset to Initial Seed</span>
-        </button>
+      {/* 3. Database Management & Reset */}
+      <div className="space-y-4">
+        {/* Wipe to Zero Slate */}
+        <div className="bg-slate-900 border border-rose-900/40 rounded-xl p-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-2">
+              <Trash2 className="w-4 h-4" />
+              <span>Clear Entire Database (Start from Scratch)</span>
+            </h3>
+            <span className="text-[10px] font-mono text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+              Zero Slate
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Wipes all data clean to ₹0. Deletes all players, historical rake entries, games, payments, expenses, and settlements. Preserves your 4 configured partner names so you can start entering your real ledger completely fresh.
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsClearConfirmOpen(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-500 text-white shadow-sm transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Clear Database (Zero Entries)</span>
+          </button>
+        </div>
+
+        {/* Reset to Seed */}
+        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-6 space-y-3">
+          <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            <RotateCcw className="w-4 h-4 text-slate-400" />
+            <span>Reset Ledger to Initial ₹52,650 Seed State</span>
+          </h3>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Loads the initial benchmark state from the specification: 16 players with ₹52,650 historical rake and ₹12,350 table recovery remaining.
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsResetConfirmOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+            <span>Load ₹52,650 Seed Data</span>
+          </button>
+        </div>
       </div>
 
       <ConfirmDialog
@@ -313,12 +347,22 @@ export const SettingsView: React.FC = () => {
       />
 
       <ConfirmDialog
+        isOpen={isClearConfirmOpen}
+        onClose={() => setIsClearConfirmOpen(false)}
+        onConfirm={handleClearConfirm}
+        title="Clear Entire Database to Zero?"
+        message="This will permanently wipe all players, historical rake entries, games, payments, expenses, and settlements. Your 4 owner names will be kept. Are you sure you want to start completely from scratch?"
+        confirmText="Yes, Wipe Database to Zero"
+        isDestructive
+      />
+
+      <ConfirmDialog
         isOpen={isResetConfirmOpen}
         onClose={() => setIsResetConfirmOpen(false)}
         onConfirm={handleResetConfirm}
-        title="Reset Ledger to Initial Seed"
-        message="Are you sure you want to reset all data back to the clean ₹52,650 historical rake seed state? Any manually added games will be erased."
-        confirmText="Reset to Seed"
+        title="Reset Ledger to Initial ₹52,650 Seed?"
+        message="Are you sure you want to reload the ₹52,650 historical rake seed with 16 players? Any current entries will be replaced."
+        confirmText="Reload Seed"
         isDestructive
       />
     </div>

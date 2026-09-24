@@ -25,13 +25,27 @@ CREATE TABLE IF NOT EXISTS games (
     game_number INTEGER NOT NULL,
     played_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     gross_rake_paise BIGINT NOT NULL CHECK (gross_rake_paise >= 0),
+    custom_allocation JSONB,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'voided')),
     notes TEXT,
     void_reason TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 4. GAME_OWNERS (Attendance per game)
+-- 4. BUCKET_TRANSFERS TABLE (Custom Fund Reallocations between Buckets)
+CREATE TABLE IF NOT EXISTS bucket_transfers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    transferred_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    from_bucket TEXT NOT NULL CHECK (from_bucket IN ('table_recovery', 'festival_fund')),
+    to_bucket TEXT NOT NULL CHECK (to_bucket IN ('table_recovery', 'festival_fund', 'owner_profit')),
+    amount_paise BIGINT NOT NULL CHECK (amount_paise > 0),
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'voided')),
+    void_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- 5. GAME_OWNERS (Attendance per game)
 CREATE TABLE IF NOT EXISTS game_owners (
     game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
     owner_id UUID NOT NULL REFERENCES owners(id) ON DELETE CASCADE,
@@ -229,3 +243,16 @@ BEGIN
     INSERT INTO players (name) VALUES ('Tanna') ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id INTO p_id;
     INSERT INTO rake_entries (player_id, amount_paise, entry_type, notes) VALUES (p_id, 60000, 'historical', 'Historical rake seed') ON CONFLICT DO NOTHING;
 END $$;
+
+-- Enable RLS on bucket_transfers
+ALTER TABLE bucket_transfers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow authenticated read bucket_transfers" ON bucket_transfers FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Allow authenticated insert bucket_transfers" ON bucket_transfers FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Allow authenticated update bucket_transfers" ON bucket_transfers FOR UPDATE TO authenticated USING (true);
+
+-- =========================================================================
+-- SCRIPT TO WIPE DATABASE (If you wish to clear all entries to start fresh)
+-- =========================================================================
+-- TRUNCATE TABLE payments, rake_entries, expenses, owner_settlements, game_owners, games, bucket_transfers, players CASCADE;
+-- INSERT INTO audit_log (action, entity_type, metadata) VALUES ('DATABASE_CLEARED', 'ledger', '{"reason": "Manual database wipe"}'::jsonb);
+

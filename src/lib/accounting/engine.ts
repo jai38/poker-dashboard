@@ -11,6 +11,7 @@ import {
   OwnerSettlement,
   PlayerPayment,
   SessionExpense,
+  BucketTransfer,
 } from './types'
 
 /**
@@ -249,6 +250,7 @@ export function calculateLedgerSummary(params: {
   payments: PlayerPayment[]
   expenses: GeneralExpense[]
   settlements: OwnerSettlement[]
+  bucketTransfers?: BucketTransfer[]
   settings?: AccountingSettings
 }): LedgerSummary {
   const {
@@ -258,6 +260,7 @@ export function calculateLedgerSummary(params: {
     payments,
     expenses,
     settlements,
+    bucketTransfers = [],
     settings = DEFAULT_ACCOUNTING_SETTINGS,
   } = params
 
@@ -269,6 +272,7 @@ export function calculateLedgerSummary(params: {
   const activePayments = payments.filter((p) => p.status === 'active')
   const activeExpenses = expenses.filter((e) => e.status === 'active')
   const activeSettlements = settlements.filter((s) => s.status === 'active')
+  const activeTransfers = bucketTransfers.filter((t) => t.status === 'active')
 
   const totalHistoricalRakePaise = activeHistorical.reduce((sum, h) => sum + h.amountPaise, 0)
   const totalGameGrossRakePaise = activeGames.reduce((sum, g) => sum + g.grossRakePaise, 0)
@@ -281,6 +285,7 @@ export function calculateLedgerSummary(params: {
   type TimelineItem =
     | { type: 'historical'; date: Date; entry: HistoricalRakeEntry }
     | { type: 'game'; date: Date; entry: GameRecord }
+    | { type: 'transfer'; date: Date; entry: BucketTransfer }
 
   const timeline: TimelineItem[] = [
     ...activeHistorical.map((h) => ({
@@ -293,14 +298,22 @@ export function calculateLedgerSummary(params: {
       date: new Date(g.playedAt),
       entry: g,
     })),
+    ...activeTransfers.map((t) => ({
+      type: 'transfer' as const,
+      date: new Date(t.transferredAt),
+      entry: t,
+    })),
   ]
 
-  // Sort chronologically. If dates are equal, historical entries come first, then games by gameNumber.
+  // Sort chronologically. If dates are equal, historical entries come first, then games by gameNumber, then transfers.
   timeline.sort((a, b) => {
     const timeDiff = a.date.getTime() - b.date.getTime()
     if (timeDiff !== 0) return timeDiff
     if (a.type !== b.type) {
-      return a.type === 'historical' ? -1 : 1
+      if (a.type === 'historical') return -1
+      if (b.type === 'historical') return 1
+      if (a.type === 'game') return -1
+      if (b.type === 'game') return 1
     }
     if (a.type === 'game' && b.type === 'game') {
       return a.entry.gameNumber - b.entry.gameNumber
@@ -342,6 +355,48 @@ export function calculateLedgerSummary(params: {
       currentTableAccumulatedPaise += allocatedToTablePaise
       currentFestivalAccumulatedPaise += allocatedToFestivalPaise
       // Any remaining historical rake beyond table and festival fund is unassigned
+    } else if (item.type === 'transfer') {
+      // Reallocate amount between buckets
+      const transfer = item.entry
+      const amt = transfer.amountPaise
+
+      // Deduct from source bucket
+      if (transfer.fromBucket === 'table_recovery') {
+        currentTableAccumulatedPaise = Math.max(0, currentTableAccumulatedPaise - amt)
+      } else if (transfer.fromBucket === 'festival_fund') {
+        currentFestivalAccumulatedPaise = Math.max(0, currentFestivalAccumulatedPaise - amt)
+      }
+
+      // Add to destination bucket
+      if (transfer.toBucket === 'table_recovery') {
+        currentTableAccumulatedPaise += amt
+      } else if (transfer.toBucket === 'festival_fund') {
+        currentFestivalAccumulatedPaise += amt
+      } else if (transfer.toBucket === 'owner_profit') {
+        totalDistributableRakePaise += amt
+        // Distribute transferred profit equally among all active table owners
+        const count = activeOwners.length
+        if (count > 0) {
+          const base = Math.floor(amt / count)
+          let rem = amt % count
+          for (const o of activeOwners) {
+            const share = base + (rem > 0 ? 1 : 0)
+            if (rem > 0) rem--
+            if (!ownerEntitlements[o.id]) {
+              ownerEntitlements[o.id] = {
+                ownerId: o.id,
+                equalSharePaise: 0,
+                excessSharePaise: 0,
+                grossEntitlementPaise: 0,
+                settledPaise: 0,
+                remainingEntitlementPaise: 0,
+              }
+            }
+            ownerEntitlements[o.id].equalSharePaise += share
+            ownerEntitlements[o.id].grossEntitlementPaise += share
+          }
+        }
+      }
     } else {
       // Game entry
       const game = item.entry
@@ -350,14 +405,34 @@ export function calculateLedgerSummary(params: {
         game.expenses || []
       )
 
-      const { allocatedToTablePaise, allocatedToFestivalPaise, distributableRakePaise } =
-        allocateRakeToBuckets(
+      let allocatedToTablePaise: number
+      let allocatedToFestivalPaise: number
+      let distributableRakePaise: number
+
+      if (game.customAllocation) {
+        // User explicitly specified how much goes to where
+        allocatedToTablePaise = Math.max(0, game.customAllocation.tableRecoveryPaise || 0)
+        allocatedToFestivalPaise = Math.max(0, game.customAllocation.festivalFundPaise || 0)
+        distributableRakePaise = Math.max(0, game.customAllocation.distributableProfitPaise || 0)
+
+        // Validate sum matches net rake; adjust profit if rounding or mismatch
+        const customSum = allocatedToTablePaise + allocatedToFestivalPaise + distributableRakePaise
+        if (customSum !== netRakePaise) {
+          distributableRakePaise = Math.max(0, netRakePaise - (allocatedToTablePaise + allocatedToFestivalPaise))
+        }
+      } else {
+        // Default standard automatic waterfall
+        const alloc = allocateRakeToBuckets(
           netRakePaise,
           currentTableAccumulatedPaise,
           settings.tableRecoveryTargetPaise,
           currentFestivalAccumulatedPaise,
           settings.festivalFundTargetPaise
         )
+        allocatedToTablePaise = alloc.allocatedToTablePaise
+        allocatedToFestivalPaise = alloc.allocatedToFestivalPaise
+        distributableRakePaise = alloc.distributableRakePaise
+      }
 
       currentTableAccumulatedPaise += allocatedToTablePaise
       currentFestivalAccumulatedPaise += allocatedToFestivalPaise
@@ -484,5 +559,6 @@ export function calculateLedgerSummary(params: {
     reconciled,
     reconciliationDiffPaise,
     gameResults,
+    transfers: activeTransfers,
   }
 }
