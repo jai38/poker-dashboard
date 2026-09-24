@@ -15,12 +15,13 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
   onClose,
   initialPlayerId,
 }) => {
-  const { players, addHistoricalRake } = useLedger()
+  const { players, addHistoricalRake, owners } = useLedger()
 
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(initialPlayerId || '')
   const [newPlayerName, setNewPlayerName] = useState<string>('')
   const [rakeRupees, setRakeRupees] = useState<string>('')
   const [paidRupees, setPaidRupees] = useState<string>('')
+  const [receivedByOwnerId, setReceivedByOwnerId] = useState<string>(owners[0]?.id || '')
   const [entryDate, setEntryDate] = useState<string>(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState<string>('Historical games')
   const [error, setError] = useState<string>('')
@@ -56,6 +57,7 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
         paidAmountPaise: paidPaise > 0 ? paidPaise : undefined,
         entryDate: entryDate ? new Date(entryDate).toISOString() : undefined,
         notes: notes.trim(),
+        receivedByOwnerId: paidPaise > 0 ? (receivedByOwnerId || undefined) : undefined,
       })
 
       const targetPlayerName = selectedPlayerId
@@ -232,6 +234,27 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
             </div>
           </div>
         </div>
+
+        {paidPaise > 0 && (
+          <div className="space-y-1.5 p-2.5 bg-slate-950/70 border border-slate-800 rounded-lg">
+            <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+              <span>Paid To Partner (Cash Custody)</span>
+              <span className="text-[10px] text-indigo-400 font-normal">Personal UPI / Bank</span>
+            </label>
+            <select
+              value={receivedByOwnerId}
+              onChange={(e) => setReceivedByOwnerId(e.target.value)}
+              className="w-full px-3 py-1.5 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+            >
+              {owners.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name} (UPI / Bank Account)
+                </option>
+              ))}
+              <option value="">Shared Table Pool / Unassigned</option>
+            </select>
+          </div>
+        )}
 
         {/* Date */}
         <div className="space-y-1.5">

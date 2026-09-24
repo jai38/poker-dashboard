@@ -76,6 +76,7 @@ interface LedgerContextType {
     paidAmountPaise?: number
     entryDate?: string
     notes?: string
+    receivedByOwnerId?: string
   }) => Promise<{ rake: HistoricalRakeEntry; payment?: PlayerPayment }>
 
   addPayment: (data: {
@@ -83,6 +84,7 @@ interface LedgerContextType {
     amountPaise: number
     paidAt?: string
     notes?: string
+    receivedByOwnerId?: string
   }) => Promise<PlayerPayment>
 
   voidPayment: (paymentId: string, reason: string) => Promise<void>
@@ -93,6 +95,7 @@ interface LedgerContextType {
     description: string
     expenseDate?: string
     gameId?: string | null
+    paidByOwnerId?: string
   }) => Promise<GeneralExpense>
 
   voidExpense: (expenseId: string, reason: string) => Promise<void>
@@ -102,6 +105,7 @@ interface LedgerContextType {
     amountPaise: number
     settledAt?: string
     notes?: string
+    paidByOwnerId?: string
   }) => Promise<OwnerSettlement>
 
   addBucketTransfer: (data: {
@@ -319,6 +323,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               id: e.id,
               description: e.description,
               amountPaise: Number(e.amount_paise),
+              paidByOwnerId: e.paid_by_owner_id || undefined,
             }))
 
           const gameAttendance: OwnerAttendance[] = (dbGameOwners || [])
@@ -370,6 +375,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           notes: p.notes,
           status: p.status,
           voidReason: p.void_reason,
+          receivedByOwnerId: p.received_by_owner_id || undefined,
         }))
         setPayments(loadedPayments)
       }
@@ -387,6 +393,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             gameId: e.game_id,
             status: e.status,
             voidReason: e.void_reason,
+            paidByOwnerId: e.paid_by_owner_id || undefined,
           }))
         setExpenses(loadedExpenses)
       }
@@ -401,6 +408,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           notes: s.notes,
           status: s.status,
           voidReason: s.void_reason,
+          paidByOwnerId: s.paid_by_owner_id || undefined,
         }))
         setSettlements(loadedSettlements)
       }
@@ -617,6 +625,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             description: e.description,
             expense_date: newGame.playedAt,
             status: 'active',
+            paid_by_owner_id: e.paidByOwnerId || null,
           }))
         )
       }
@@ -670,6 +679,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     paidAmountPaise?: number
     entryDate?: string
     notes?: string
+    receivedByOwnerId?: string
   }) {
     if (data.amountPaise <= 0) {
       throw new Error('Rake amount must be greater than zero.')
@@ -746,6 +756,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         paidAt: data.entryDate || new Date().toISOString(),
         status: 'active',
         notes: `Initial payment with historical rake entry`,
+        receivedByOwnerId: data.receivedByOwnerId,
       }
       updatedPayments.push(newPayment)
       setPayments(updatedPayments)
@@ -758,6 +769,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           paid_at: newPayment!.paidAt,
           notes: newPayment!.notes,
           status: 'active',
+          received_by_owner_id: data.receivedByOwnerId || null,
         })
       )
     }
@@ -783,6 +795,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     amountPaise: number
     paidAt?: string
     notes?: string
+    receivedByOwnerId?: string
   }): Promise<PlayerPayment> {
     if (data.amountPaise <= 0) {
       throw new Error('Payment amount must be greater than zero.')
@@ -797,6 +810,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       paidAt: data.paidAt || new Date().toISOString(),
       notes: data.notes,
       status: 'active',
+      receivedByOwnerId: data.receivedByOwnerId,
     }
 
     const updatedPayments = [...payments, newPayment]
@@ -811,6 +825,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         paid_at: newPayment.paidAt,
         notes: newPayment.notes,
         status: 'active',
+        received_by_owner_id: newPayment.receivedByOwnerId || null,
       })
     )
 
@@ -818,6 +833,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       playerId: data.playerId,
       playerName: player.name,
       amountPaise: data.amountPaise,
+      receivedByOwnerId: data.receivedByOwnerId,
     })
 
     return newPayment
@@ -851,6 +867,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     description: string
     expenseDate?: string
     gameId?: string | null
+    paidByOwnerId?: string
   }): Promise<GeneralExpense> {
     if (data.amountPaise <= 0) {
       throw new Error('Expense amount must be greater than zero.')
@@ -867,6 +884,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       expenseDate: data.expenseDate || new Date().toISOString(),
       gameId: data.gameId || null,
       status: 'active',
+      paidByOwnerId: data.paidByOwnerId,
     }
 
     const updatedExpenses = [...expenses, newExpense]
@@ -882,6 +900,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         description: newExpense.description,
         expense_date: newExpense.expenseDate,
         status: 'active',
+        paid_by_owner_id: newExpense.paidByOwnerId || null,
       })
     )
 
@@ -890,6 +909,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       amountPaise: data.amountPaise,
       description: data.description,
       gameId: data.gameId,
+      paidByOwnerId: data.paidByOwnerId,
     })
 
     return newExpense
@@ -922,6 +942,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     amountPaise: number
     settledAt?: string
     notes?: string
+    paidByOwnerId?: string
   }): Promise<OwnerSettlement> {
     if (data.amountPaise <= 0) {
       throw new Error('Settlement amount must be greater than zero.')
@@ -947,6 +968,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       settledAt: data.settledAt || new Date().toISOString(),
       status: 'active',
       notes: data.notes,
+      paidByOwnerId: data.paidByOwnerId,
     }
 
     const updatedSettlements = [...settlements, newSettlement]
@@ -961,6 +983,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         settled_at: newSettlement.settledAt,
         notes: newSettlement.notes,
         status: 'active',
+        paid_by_owner_id: newSettlement.paidByOwnerId || null,
       })
     )
 
@@ -968,6 +991,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ownerId: data.ownerId,
       ownerName: owner.name,
       amountPaise: data.amountPaise,
+      paidByOwnerId: data.paidByOwnerId,
     })
 
     return newSettlement
@@ -1261,6 +1285,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               expense_type: 'session_expense',
               description: e.description,
               expense_date: g.playedAt,
+              paid_by_owner_id: e.paidByOwnerId || null,
             }))
           )
         }
@@ -1294,6 +1319,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           notes: p.notes,
           status: p.status,
           void_reason: p.voidReason,
+          received_by_owner_id: p.receivedByOwnerId || null,
         }))
       )
     }
@@ -1310,6 +1336,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           expense_date: e.expenseDate,
           status: e.status,
           void_reason: e.voidReason,
+          paid_by_owner_id: e.paidByOwnerId || null,
         }))
       )
     }
@@ -1325,6 +1352,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           notes: s.notes,
           status: s.status,
           void_reason: s.voidReason,
+          paid_by_owner_id: s.paidByOwnerId || null,
         }))
       )
     }

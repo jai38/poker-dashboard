@@ -12,6 +12,7 @@ import {
   PlayerPayment,
   SessionExpense,
   BucketTransfer,
+  OwnerP2PTransfer,
 } from './types'
 
 /**
@@ -337,6 +338,12 @@ export function calculateLedgerSummary(params: {
       grossEntitlementPaise: 0,
       settledPaise: 0,
       remainingEntitlementPaise: 0,
+      cashCollectedPaise: 0,
+      expensesPaidPaise: 0,
+      settlementsPaidPaise: 0,
+      netCashHeldPaise: 0,
+      netPositionPaise: 0,
+      tableReservesHeldPaise: 0,
     }
   }
 
@@ -390,6 +397,12 @@ export function calculateLedgerSummary(params: {
                 grossEntitlementPaise: 0,
                 settledPaise: 0,
                 remainingEntitlementPaise: 0,
+                cashCollectedPaise: 0,
+                expensesPaidPaise: 0,
+                settlementsPaidPaise: 0,
+                netCashHeldPaise: 0,
+                netPositionPaise: 0,
+                tableReservesHeldPaise: 0,
               }
             }
             ownerEntitlements[o.id].equalSharePaise += share
@@ -461,6 +474,12 @@ export function calculateLedgerSummary(params: {
               grossEntitlementPaise: 0,
               settledPaise: 0,
               remainingEntitlementPaise: 0,
+              cashCollectedPaise: 0,
+              expensesPaidPaise: 0,
+              settlementsPaidPaise: 0,
+              netCashHeldPaise: 0,
+              netPositionPaise: 0,
+              tableReservesHeldPaise: 0,
             }
           }
           ownerEntitlements[ownerId].equalSharePaise += equalShare[ownerId] || 0
@@ -487,10 +506,38 @@ export function calculateLedgerSummary(params: {
     }
   }
 
-  // 3. Process Owner Settlements
+  // 3. Process Cash Custody (Player payments received in partner accounts)
+  let unassignedCashPaise = 0
+  for (const payment of activePayments) {
+    if (payment.receivedByOwnerId && ownerEntitlements[payment.receivedByOwnerId]) {
+      ownerEntitlements[payment.receivedByOwnerId].cashCollectedPaise += payment.amountPaise
+    } else {
+      unassignedCashPaise += payment.amountPaise
+    }
+  }
+
+  // 4. Process Expenses Paid Out of Pocket by Owners
+  for (const game of activeGames) {
+    for (const exp of game.expenses || []) {
+      if (exp.paidByOwnerId && ownerEntitlements[exp.paidByOwnerId]) {
+        ownerEntitlements[exp.paidByOwnerId].expensesPaidPaise += exp.amountPaise
+      }
+    }
+  }
+
+  for (const exp of activeExpenses) {
+    if (exp.paidByOwnerId && ownerEntitlements[exp.paidByOwnerId]) {
+      ownerEntitlements[exp.paidByOwnerId].expensesPaidPaise += exp.amountPaise
+    }
+  }
+
+  // 5. Process Owner Settlements (P2P payouts & table settlements)
   for (const settlement of activeSettlements) {
     if (ownerEntitlements[settlement.ownerId]) {
       ownerEntitlements[settlement.ownerId].settledPaise += settlement.amountPaise
+    }
+    if (settlement.paidByOwnerId && ownerEntitlements[settlement.paidByOwnerId]) {
+      ownerEntitlements[settlement.paidByOwnerId].settlementsPaidPaise += settlement.amountPaise
     }
   }
 
@@ -500,12 +547,69 @@ export function calculateLedgerSummary(params: {
 
   for (const ent of Object.values(ownerEntitlements)) {
     ent.remainingEntitlementPaise = Math.max(0, ent.grossEntitlementPaise - ent.settledPaise)
+    ent.netCashHeldPaise = ent.cashCollectedPaise - ent.expensesPaidPaise - ent.settlementsPaidPaise
+    // Net Position: positive = owed to partner; negative = partner holding excess table cash
+    ent.netPositionPaise = ent.remainingEntitlementPaise - ent.netCashHeldPaise
     totalOwnerEntitlementPaise += ent.grossEntitlementPaise
     totalOwnerSettledPaise += ent.settledPaise
     remainingOwnerSettlementPaise += ent.remainingEntitlementPaise
   }
 
-  // 4. Expenses summary
+  // 6. Calculate Peer-to-Peer Transfer Recommendations & Table Reserves Custody
+  const recommendedTransfers: OwnerP2PTransfer[] = []
+
+  interface BalanceItem {
+    ownerId: string
+    balancePaise: number
+  }
+
+  const creditors: BalanceItem[] = []
+  const debtors: BalanceItem[] = []
+
+  for (const ent of Object.values(ownerEntitlements)) {
+    if (ent.netPositionPaise > 0) {
+      creditors.push({ ownerId: ent.ownerId, balancePaise: ent.netPositionPaise })
+    } else if (ent.netPositionPaise < 0) {
+      debtors.push({ ownerId: ent.ownerId, balancePaise: Math.abs(ent.netPositionPaise) })
+    }
+  }
+
+  let cIdx = 0
+  let dIdx = 0
+
+  while (cIdx < creditors.length && dIdx < debtors.length) {
+    const creditor = creditors[cIdx]
+    const debtor = debtors[dIdx]
+    const transferPaise = Math.min(creditor.balancePaise, debtor.balancePaise)
+
+    if (transferPaise > 0) {
+      recommendedTransfers.push({
+        fromOwnerId: debtor.ownerId,
+        toOwnerId: creditor.ownerId,
+        amountPaise: transferPaise,
+        purpose: 'Partner profit / expense settlement',
+      })
+      creditor.balancePaise -= transferPaise
+      debtor.balancePaise -= transferPaise
+    }
+
+    if (creditor.balancePaise === 0) cIdx++
+    if (debtor.balancePaise === 0) dIdx++
+  }
+
+  // Any remaining excess held by debtors represents money held for Table Recovery / Festival Fund
+  for (const debtor of debtors) {
+    if (debtor.balancePaise > 0 && ownerEntitlements[debtor.ownerId]) {
+      ownerEntitlements[debtor.ownerId].tableReservesHeldPaise = debtor.balancePaise
+    }
+  }
+
+  const totalTableReservesAccumulatedPaise = currentTableAccumulatedPaise + currentFestivalAccumulatedPaise
+  const totalTableReservesInCustodyPaise =
+    Object.values(ownerEntitlements).reduce((sum, ent) => sum + ent.tableReservesHeldPaise, 0) +
+    unassignedCashPaise
+
+  // 7. Expenses summary
   const totalSessionExpensesPaise = activeGames.reduce(
     (sum, g) => sum + (g.expenses || []).reduce((s, e) => s + e.amountPaise, 0),
     0
@@ -519,7 +623,7 @@ export function calculateLedgerSummary(params: {
 
   const netGeneralAdjustmentPaise = totalGeneralExpensesPaise - totalCreditsAdjustmentsPaise
 
-  // 5. Verification / Reconciliation
+  // 8. Verification / Reconciliation
   const reconciliationDiffPaise = totalDistributableRakePaise - totalOwnerEntitlementPaise
   const reconciled = reconciliationDiffPaise === 0
 
@@ -555,6 +659,11 @@ export function calculateLedgerSummary(params: {
     totalOwnerEntitlementPaise,
     totalOwnerSettledPaise,
     remainingOwnerSettlementPaise,
+
+    unassignedCashPaise,
+    recommendedTransfers,
+    totalTableReservesAccumulatedPaise,
+    totalTableReservesInCustodyPaise,
 
     reconciled,
     reconciliationDiffPaise,

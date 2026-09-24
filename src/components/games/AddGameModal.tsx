@@ -104,14 +104,16 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
     setExpenses((prev) => prev.filter((_, idx) => idx !== index))
   }
 
-  const handleExpenseChange = (index: number, field: 'description' | 'rupees', value: string) => {
+  const handleExpenseChange = (index: number, field: 'description' | 'rupees' | 'paidByOwnerId', value: string) => {
     setExpenses((prev) =>
       prev.map((e, idx) => {
         if (idx !== index) return e
         if (field === 'description') {
           return { ...e, description: value }
-        } else {
+        } else if (field === 'rupees') {
           return { ...e, amountPaise: parseRupeesToPaise(value) }
+        } else {
+          return { ...e, paidByOwnerId: value || undefined }
         }
       })
     )
@@ -366,15 +368,15 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
 
             <div className="space-y-2">
               {expenses.map((expense, idx) => (
-                <div key={idx} className="flex items-center gap-2">
+                <div key={idx} className="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-slate-950/40 p-2 sm:p-0 rounded-lg border sm:border-0 border-slate-800/80">
                   <input
                     type="text"
                     placeholder="e.g. Electricity, Snacks, Cards"
                     value={expense.description}
                     onChange={(e) => handleExpenseChange(idx, 'description', e.target.value)}
-                    className="flex-1 px-3 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+                    className="flex-1 min-w-[140px] px-3 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
                   />
-                  <div className="relative w-32 shrink-0">
+                  <div className="relative w-28 shrink-0">
                     <span className="absolute left-2.5 top-1.5 text-xs text-slate-500">₹</span>
                     <input
                       type="number"
@@ -385,11 +387,24 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                       className="w-full pl-6 pr-2 py-1.5 text-xs font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 text-right"
                     />
                   </div>
+                  <select
+                    value={expense.paidByOwnerId || ''}
+                    onChange={(e) => handleExpenseChange(idx, 'paidByOwnerId', e.target.value)}
+                    className="w-28 shrink-0 px-2 py-1.5 text-[11px] bg-slate-950 border border-slate-800 rounded-lg text-slate-300 focus:outline-none focus:border-indigo-500"
+                    title="Paid by partner (reimbursable out of pocket) or from table pool"
+                  >
+                    <option value="">Table Pool</option>
+                    {owners.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
                   {expenses.length > 1 && (
                     <button
                       type="button"
                       onClick={() => handleRemoveExpenseRow(idx)}
-                      className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors"
+                      className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors ml-auto sm:ml-0"
                       title="Remove expense"
                     >
                       <Trash2 className="w-4 h-4" />

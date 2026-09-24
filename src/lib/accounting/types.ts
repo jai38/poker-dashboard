@@ -19,6 +19,7 @@ export interface SessionExpense {
   amountPaise: number
   description: string
   category?: string
+  paidByOwnerId?: string // Partner who paid out of pocket
 }
 
 export interface CustomGameAllocation {
@@ -69,6 +70,7 @@ export interface PlayerPayment {
   status: 'active' | 'voided'
   notes?: string
   voidReason?: string
+  receivedByOwnerId?: string // Partner who collected this payment (UPI/Cash/Account)
 }
 
 export interface GeneralExpense {
@@ -80,16 +82,38 @@ export interface GeneralExpense {
   gameId?: string | null
   status: 'active' | 'voided'
   voidReason?: string
+  paidByOwnerId?: string // Partner who paid out of pocket
 }
 
 export interface OwnerSettlement {
   id: string
-  ownerId: string
+  ownerId: string // Partner receiving the settlement
   amountPaise: number
   settledAt: string | Date
   status: 'active' | 'voided'
   notes?: string
   voidReason?: string
+  paidByOwnerId?: string // Partner who paid this settlement from their cash custody
+}
+
+export interface OwnerP2PTransfer {
+  fromOwnerId: string
+  toOwnerId: string
+  amountPaise: number
+  purpose: string
+}
+
+export interface OwnerCustodySummary {
+  ownerId: string
+  cashCollectedPaise: number
+  expensesPaidPaise: number
+  settlementsPaidPaise: number
+  settledReceivedPaise: number
+  netCashHeldPaise: number
+  grossEntitlementPaise: number
+  remainingEntitlementPaise: number
+  netPositionPaise: number // > 0: to receive, < 0: holding excess table money
+  tableReservesHeldPaise: number // portion of table/festival reserves in this partner's custody
 }
 
 export interface AccountingSettings {
@@ -169,10 +193,22 @@ export interface LedgerSummary {
     grossEntitlementPaise: number
     settledPaise: number
     remainingEntitlementPaise: number
+    cashCollectedPaise: number
+    expensesPaidPaise: number
+    settlementsPaidPaise: number
+    netCashHeldPaise: number
+    netPositionPaise: number
+    tableReservesHeldPaise: number
   }>
   totalOwnerEntitlementPaise: number
   totalOwnerSettledPaise: number
   remainingOwnerSettlementPaise: number
+
+  // Cash Custody & Settlement Recommendations
+  unassignedCashPaise: number
+  recommendedTransfers: OwnerP2PTransfer[]
+  totalTableReservesAccumulatedPaise: number
+  totalTableReservesInCustodyPaise: number
 
   // Audit / Reconciliation
   reconciled: boolean

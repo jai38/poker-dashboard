@@ -8,19 +8,30 @@ interface RecordSettlementModalProps {
   isOpen: boolean
   onClose: () => void
   initialOwnerId?: string
+  initialPayerId?: string
+  initialAmountPaise?: number
 }
 
 export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
   isOpen,
   onClose,
   initialOwnerId,
+  initialPayerId,
+  initialAmountPaise,
 }) => {
   const { owners, summary, recordOwnerSettlement } = useLedger()
 
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>(initialOwnerId || owners[0]?.id || '')
-  const [amountRupees, setAmountRupees] = useState<string>('')
+  const [paidByOwnerId, setPaidByOwnerId] = useState<string>(initialPayerId || '')
+  const [amountRupees, setAmountRupees] = useState<string>(
+    initialAmountPaise ? (initialAmountPaise / 100).toString() : ''
+  )
   const [settledAt, setSettledAt] = useState<string>(new Date().toISOString().split('T')[0])
-  const [notes, setNotes] = useState<string>('')
+  const [notes, setNotes] = useState<string>(
+    initialPayerId
+      ? `P2P transfer from ${owners.find((o) => o.id === initialPayerId)?.name || 'Partner'}`
+      : ''
+  )
   const [error, setError] = useState<string>('')
 
   const selectedOwner = owners.find((o) => o.id === selectedOwnerId)
@@ -46,10 +57,12 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
       return
     }
 
-    if (amountPaise > remainingPaise) {
+    const maxAllowedPaise = Math.max(remainingPaise, ownerEnt?.netPositionPaise || 0)
+
+    if (maxAllowedPaise > 0 && amountPaise > maxAllowedPaise) {
       setError(
-        `Settlement amount (${formatINR(amountPaise)}) exceeds owner's remaining entitlement (${formatINR(
-          remainingPaise
+        `Settlement amount (${formatINR(amountPaise)}) exceeds owner's receivable balance (${formatINR(
+          maxAllowedPaise
         )}).`
       )
       return
@@ -61,6 +74,7 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
         amountPaise,
         settledAt: new Date(settledAt).toISOString(),
         notes: notes.trim(),
+        paidByOwnerId: paidByOwnerId || undefined,
       })
       handleResetAndClose()
     } catch (err: any) {
@@ -108,6 +122,36 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
               )
             })}
           </select>
+        </div>
+
+        {/* Paid By (Source of Funds / P2P Payer) */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+            <span>Paid By (Source of Funds)</span>
+            <span className="text-[10px] text-indigo-400 font-normal">P2P or Table Pool</span>
+          </label>
+          <select
+            value={paidByOwnerId}
+            onChange={(e) => setPaidByOwnerId(e.target.value)}
+            className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+          >
+            <option value="">Shared Table Cash Pool</option>
+            {owners
+              .filter((o) => o.id !== selectedOwnerId)
+              .map((o) => {
+                const ent = summary.ownerEntitlements[o.id]
+                return (
+                  <option key={o.id} value={o.id}>
+                    Transferred by {o.name} (Cash in hand: {formatINR(ent?.netCashHeldPaise || 0)})
+                  </option>
+                )
+              })}
+          </select>
+          {paidByOwnerId && (
+            <p className="text-[11px] text-indigo-300">
+              Direct Peer-to-Peer Settlement: Decrements {owners.find((o) => o.id === paidByOwnerId)?.name}'s cash custody and settles {selectedOwner?.name}'s entitlement.
+            </p>
+          )}
         </div>
 
         {/* Owner Entitlement Status (Section 25) */}

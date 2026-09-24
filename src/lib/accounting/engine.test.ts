@@ -553,6 +553,168 @@ describe('Pure Accounting Engine Specification Tests', () => {
     expect(summary.ownerEntitlements['o4'].grossEntitlementPaise).toBe(2500 * 100)
     expect(summary.reconciled).toBe(true)
   })
+
+  // Test 23: Cash Custody & Entitlements with Peer-to-Peer Transfer Matrix
+  it('Test 23: Correctly tracks cash collected per partner, reimburses out-of-pocket expenses, and recommends P2P transfers', () => {
+    // 1 Game with ₹48,000 net rake (₹20,000 table recovery, ₹10,000 festival fund, ₹18,000 distributable profit = ₹4,500 each)
+    const games: GameRecord[] = [
+      {
+        id: 'g1',
+        gameNumber: 1,
+        playedAt: '2026-09-01T20:00:00Z',
+        grossRakePaise: 48000 * 100,
+        expenses: [],
+        owners: defaultOwners,
+        status: 'active',
+        customAllocation: {
+          tableRecoveryPaise: 20000 * 100,
+          festivalFundPaise: 10000 * 100,
+          distributableProfitPaise: 18000 * 100,
+        },
+      },
+    ]
+
+    // Payments: Owner 1 collected ₹40,000 via UPI; Owner 2 collected ₹10,000 via UPI
+    const payments = [
+      {
+        id: 'pay-1',
+        playerId: 'p1',
+        amountPaise: 40000 * 100,
+        paidAt: '2026-09-01T22:00:00Z',
+        status: 'active' as const,
+        receivedByOwnerId: 'o1',
+      },
+      {
+        id: 'pay-2',
+        playerId: 'p2',
+        amountPaise: 10000 * 100,
+        paidAt: '2026-09-01T22:30:00Z',
+        status: 'active' as const,
+        receivedByOwnerId: 'o2',
+      },
+    ]
+
+    // Owner 3 paid ₹2,000 for cards out of pocket
+    const expenses = [
+      {
+        id: 'exp-1',
+        type: 'monthly_expense' as const,
+        amountPaise: 2000 * 100,
+        description: 'Poker cards and chips',
+        expenseDate: '2026-09-01T18:00:00Z',
+        status: 'active' as const,
+        paidByOwnerId: 'o3',
+      },
+    ]
+
+    const summary = calculateLedgerSummary({
+      owners: mockOwnerDefs,
+      games,
+      historicalRake: [],
+      payments,
+      expenses,
+      settlements: [],
+    })
+
+    // Entitlements: Each owner earned ₹4,500
+    expect(summary.ownerEntitlements['o1'].grossEntitlementPaise).toBe(4500 * 100)
+    expect(summary.ownerEntitlements['o2'].grossEntitlementPaise).toBe(4500 * 100)
+    expect(summary.ownerEntitlements['o3'].grossEntitlementPaise).toBe(4500 * 100)
+    expect(summary.ownerEntitlements['o4'].grossEntitlementPaise).toBe(4500 * 100)
+
+    // Cash held
+    expect(summary.ownerEntitlements['o1'].cashCollectedPaise).toBe(40000 * 100)
+    expect(summary.ownerEntitlements['o2'].cashCollectedPaise).toBe(10000 * 100)
+    expect(summary.ownerEntitlements['o3'].cashCollectedPaise).toBe(0)
+    expect(summary.ownerEntitlements['o3'].expensesPaidPaise).toBe(2000 * 100)
+    expect(summary.ownerEntitlements['o3'].netCashHeldPaise).toBe(-2000 * 100)
+
+    // Net Positions:
+    // o3: 4,500 profit + 2,000 expense reimbursement = +6,500 owed to o3
+    expect(summary.ownerEntitlements['o3'].netPositionPaise).toBe(6500 * 100)
+    // o4: 4,500 profit = +4,500 owed to o4
+    expect(summary.ownerEntitlements['o4'].netPositionPaise).toBe(4500 * 100)
+    // o1: 4,500 profit - 40,000 cash held = -35,500 (holds excess)
+    expect(summary.ownerEntitlements['o1'].netPositionPaise).toBe(-35500 * 100)
+    // o2: 4,500 profit - 10,000 cash held = -5,500 (holds excess)
+    expect(summary.ownerEntitlements['o2'].netPositionPaise).toBe(-5500 * 100)
+
+    // Recommended transfers satisfy creditors o3 (₹6,500) and o4 (₹4,500)
+    const totalTransferred = summary.recommendedTransfers.reduce((s, t) => s + t.amountPaise, 0)
+    expect(totalTransferred).toBe((6500 + 4500) * 100)
+
+    // After satisfying creditors, the remaining excess matches Table Recovery (₹20k) + Festival Fund (₹10k) = ₹30k
+    expect(summary.totalTableReservesAccumulatedPaise).toBe(30000 * 100)
+    const totalReservesHeld = Object.values(summary.ownerEntitlements).reduce(
+      (s, e) => s + e.tableReservesHeldPaise,
+      0
+    )
+    expect(totalReservesHeld).toBe(30000 * 100)
+  })
+
+  // Test 24: P2P Settlement payout properly registers payer and recipient
+  it('Test 24: P2P Settlement between partners decrements payer cash custody and settles recipient entitlement', () => {
+    const games: GameRecord[] = [
+      {
+        id: 'g1',
+        gameNumber: 1,
+        playedAt: '2026-09-01T20:00:00Z',
+        grossRakePaise: 4000 * 100,
+        expenses: [],
+        owners: defaultOwners,
+        status: 'active',
+        customAllocation: {
+          tableRecoveryPaise: 0,
+          festivalFundPaise: 0,
+          distributableProfitPaise: 4000 * 100, // ₹1,000 each
+        },
+      },
+    ]
+
+    // Owner 1 collected full ₹4,000 from players
+    const payments = [
+      {
+        id: 'pay-1',
+        playerId: 'p1',
+        amountPaise: 4000 * 100,
+        paidAt: '2026-09-01T22:00:00Z',
+        status: 'active' as const,
+        receivedByOwnerId: 'o1',
+      },
+    ]
+
+    // Owner 1 transfers ₹1,000 to Owner 2 to settle Owner 2's profit
+    const settlements = [
+      {
+        id: 'set-1',
+        ownerId: 'o2', // recipient
+        paidByOwnerId: 'o1', // payer
+        amountPaise: 1000 * 100,
+        settledAt: '2026-09-02T10:00:00Z',
+        status: 'active' as const,
+      },
+    ]
+
+    const summary = calculateLedgerSummary({
+      owners: mockOwnerDefs,
+      games,
+      historicalRake: [],
+      payments,
+      expenses: [],
+      settlements,
+    })
+
+    // Owner 2 is now fully settled (remaining entitlement = 0, net position = 0)
+    expect(summary.ownerEntitlements['o2'].settledPaise).toBe(1000 * 100)
+    expect(summary.ownerEntitlements['o2'].remainingEntitlementPaise).toBe(0)
+    expect(summary.ownerEntitlements['o2'].netPositionPaise).toBe(0)
+
+    // Owner 1's cash held dropped from ₹4,000 to ₹3,000
+    expect(summary.ownerEntitlements['o1'].settlementsPaidPaise).toBe(1000 * 100)
+    expect(summary.ownerEntitlements['o1'].netCashHeldPaise).toBe(3000 * 100)
+    // Owner 1 remaining entitlement = ₹1,000, so net position = 1,000 - 3,000 = -2,000 (holding remaining ₹2,000 for o3 and o4)
+    expect(summary.ownerEntitlements['o1'].netPositionPaise).toBe(-2000 * 100)
+  })
 })
 
 

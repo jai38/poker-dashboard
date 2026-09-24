@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS payments (
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'voided')),
     void_reason TEXT,
+    received_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
@@ -92,6 +93,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     expense_date TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'voided')),
     void_reason TEXT,
+    paid_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
@@ -104,8 +106,14 @@ CREATE TABLE IF NOT EXISTS owner_settlements (
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'voided')),
     void_reason TEXT,
+    paid_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+-- Safe idempotent migrations for existing databases:
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS received_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS paid_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
+ALTER TABLE owner_settlements ADD COLUMN IF NOT EXISTS paid_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
 
 -- 10. SETTINGS TABLE
 CREATE TABLE IF NOT EXISTS settings (

@@ -10,13 +10,14 @@ interface AddExpenseModalProps {
 }
 
 export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose }) => {
-  const { games, addExpense } = useLedger()
+  const { games, addExpense, owners } = useLedger()
 
   const [type, setType] = useState<'monthly_expense' | 'credit_adjustment' | 'session_expense'>(
     'monthly_expense'
   )
   const [description, setDescription] = useState('')
   const [amountRupees, setAmountRupees] = useState('')
+  const [paidByOwnerId, setPaidByOwnerId] = useState<string>('')
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0])
   const [gameId, setGameId] = useState<string>('')
   const [error, setError] = useState('')
@@ -44,6 +45,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
         description: description.trim(),
         expenseDate: new Date(expenseDate).toISOString(),
         gameId: gameId || null,
+        paidByOwnerId: paidByOwnerId || undefined,
       })
       handleResetAndClose()
     } catch (err: any) {
@@ -54,6 +56,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
   const handleResetAndClose = () => {
     setDescription('')
     setAmountRupees('')
+    setPaidByOwnerId('')
     setGameId('')
     setError('')
     onClose()
@@ -125,6 +128,29 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
               required
             />
           </div>
+        </div>
+
+        {/* Paid By Partner (Custody & Reimbursement) */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+            <span>Paid By</span>
+            <span className="text-[10px] text-indigo-400 font-normal">Out of pocket or table pool</span>
+          </label>
+          <select
+            value={paidByOwnerId}
+            onChange={(e) => setPaidByOwnerId(e.target.value)}
+            className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+          >
+            <option value="">Shared Table Cash Pool</option>
+            {owners.map((o) => (
+              <option key={o.id} value={o.id}>
+                Paid by {o.name} (Reimbursable Out of Pocket)
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-slate-400">
+            If a partner paid from their own pocket, the settlement engine will reimburse them during partner payouts.
+          </p>
         </div>
 
         {/* Date */}

@@ -15,9 +15,10 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   onClose,
   initialPlayerId,
 }) => {
-  const { players, historicalRake, payments, addPayment } = useLedger()
+  const { players, historicalRake, payments, addPayment, owners } = useLedger()
 
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(initialPlayerId || '')
+  const [receivedByOwnerId, setReceivedByOwnerId] = useState<string>(owners[0]?.id || '')
   const [amountRupees, setAmountRupees] = useState<string>('')
   const [paidAt, setPaidAt] = useState<string>(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState<string>('')
@@ -71,10 +72,12 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         amountPaise,
         paidAt: paidAt ? new Date(paidAt).toISOString() : undefined,
         notes: notes.trim(),
+        receivedByOwnerId: receivedByOwnerId || undefined,
       })
 
+      const receiverName = owners.find((o) => o.id === receivedByOwnerId)?.name || 'Table Pool'
       setSuccessMsg(
-        `Recorded ${formatINR(amountPaise)} payment for ${selectedPlayer?.name}. Remaining outstanding: ${formatINR(
+        `Recorded ${formatINR(amountPaise)} payment for ${selectedPlayer?.name} (Received by: ${receiverName}). Remaining outstanding: ${formatINR(
           playerOutstandingPaise - amountPaise
         )}.`
       )
@@ -194,6 +197,29 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
               required
             />
           </div>
+        </div>
+
+        {/* Received By Partner Account (Cash Custody) */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+            <span>Received By Partner <span className="text-rose-400">*</span></span>
+            <span className="text-[10px] text-indigo-400 font-normal">Personal UPI / Bank</span>
+          </label>
+          <select
+            value={receivedByOwnerId}
+            onChange={(e) => setReceivedByOwnerId(e.target.value)}
+            className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+          >
+            {owners.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name} (Personal UPI / Bank)
+              </option>
+            ))}
+            <option value="">Shared Table Pool / Unassigned</option>
+          </select>
+          <p className="text-[11px] text-slate-400">
+            Tracks who physically holds this money so partner profit & expense balances square up accurately.
+          </p>
         </div>
 
         {/* Paid Date */}
