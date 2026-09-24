@@ -57,7 +57,12 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
 
   // Session expenses: default paid by hosting owner
   const [expenses, setExpenses] = useState<SessionExpense[]>([
-    { amountPaise: 0, description: 'Refreshments / Electricity', paidByOwnerId: owners[0]?.id || '' },
+    {
+      id: `exp-draft-${Date.now()}-0`,
+      amountPaise: 0,
+      description: 'Refreshments / Electricity',
+      paidByOwnerId: owners[0]?.id || '',
+    },
   ])
   const [notes, setNotes] = useState<string>('')
   const [error, setError] = useState<string>('')
@@ -168,7 +173,12 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
   const handleAddExpenseRow = () => {
     setExpenses((prev) => [
       ...prev,
-      { amountPaise: 0, description: '', paidByOwnerId: hostOwnerId },
+      {
+        id: `exp-draft-${Date.now()}-${prev.length}`,
+        amountPaise: 0,
+        description: '',
+        paidByOwnerId: hostOwnerId,
+      },
     ])
   }
 
@@ -267,7 +277,14 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
   const handleResetAndClose = () => {
     setGrossRakeInput('')
     setPlayerRows([])
-    setExpenses([{ amountPaise: 0, description: 'Refreshments / Electricity', paidByOwnerId: hostOwnerId }])
+    setExpenses([
+      {
+        id: `exp-draft-${Date.now()}-0`,
+        amountPaise: 0,
+        description: 'Refreshments / Electricity',
+        paidByOwnerId: hostOwnerId,
+      },
+    ])
     setNotes('')
     setError('')
     setSavedSuccess(null)

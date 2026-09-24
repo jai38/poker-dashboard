@@ -92,6 +92,12 @@ interface LedgerContextType {
 
   voidPayment: (paymentId: string, reason: string) => Promise<void>
 
+  addSessionExpense: (
+    gameId: string,
+    expense: { description: string; amountPaise: number; paidByOwnerId?: string }
+  ) => Promise<void>
+  removeSessionExpense: (gameId: string, expenseId: string, reason?: string) => Promise<void>
+
   addExpense: (data: {
     type: 'session_expense' | 'monthly_expense' | 'credit_adjustment'
     amountPaise: number
@@ -145,6 +151,56 @@ function safeSupabaseOp(fn: (client: SupabaseClient) => Promise<any> | any) {
       console.warn('Supabase operation exception:', e)
     }
   }
+}
+
+async function insertExpenseResilient(client: SupabaseClient, row: any) {
+  const { error } = await client.from('expenses').insert(row)
+  if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('paid_by_owner_id'))) {
+    console.warn('Expenses table missing paid_by_owner_id column. Retrying insert without it:', error.message)
+    const { paid_by_owner_id, ...fallback } = row
+    return await client.from('expenses').insert(fallback)
+  }
+  return { error }
+}
+
+async function insertExpensesBatchResilient(client: SupabaseClient, rows: any[]) {
+  const { error } = await client.from('expenses').insert(rows)
+  if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('paid_by_owner_id'))) {
+    console.warn('Expenses table missing paid_by_owner_id column. Retrying batch insert without it:', error.message)
+    const fallbackRows = rows.map(({ paid_by_owner_id, ...rest }) => rest)
+    return await client.from('expenses').insert(fallbackRows)
+  }
+  return { error }
+}
+
+async function insertPaymentResilient(client: SupabaseClient, row: any) {
+  const { error } = await client.from('payments').insert(row)
+  if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('received_by_owner_id'))) {
+    console.warn('Payments table missing received_by_owner_id column. Retrying insert without it:', error.message)
+    const { received_by_owner_id, ...fallback } = row
+    return await client.from('payments').insert(fallback)
+  }
+  return { error }
+}
+
+async function insertPaymentsBatchResilient(client: SupabaseClient, rows: any[]) {
+  const { error } = await client.from('payments').insert(rows)
+  if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('received_by_owner_id'))) {
+    console.warn('Payments table missing received_by_owner_id column. Retrying batch insert without it:', error.message)
+    const fallbackRows = rows.map(({ received_by_owner_id, ...rest }) => rest)
+    return await client.from('payments').insert(fallbackRows)
+  }
+  return { error }
+}
+
+async function insertSettlementResilient(client: SupabaseClient, row: any) {
+  const { error } = await client.from('owner_settlements').insert(row)
+  if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('paid_by_owner_id'))) {
+    console.warn('Owner settlements table missing paid_by_owner_id column. Retrying insert without it:', error.message)
+    const { paid_by_owner_id, ...fallback } = row
+    return await client.from('owner_settlements').insert(fallback)
+  }
+  return { error }
 }
 
 function generateInitialSeedState() {
@@ -321,13 +377,16 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (dbGames) {
         loadedGames = dbGames.map((g: any) => {
           const gameExpenses: SessionExpense[] = (dbExpenses || [])
-            .filter((e: any) => e.game_id === g.id && e.expense_type === 'session_expense')
+            .filter((e: any) => e.game_id === g.id && e.expense_type === 'session_expense' && e.status !== 'voided')
             .map((e: any) => ({
               id: e.id,
               description: e.description,
               amountPaise: Number(e.amount_paise),
               paidByOwnerId: e.paid_by_owner_id || undefined,
             }))
+
+          const localGame = games.find((lg) => lg.id === g.id)
+          const finalGameExpenses = gameExpenses.length > 0 ? gameExpenses : (localGame?.expenses || [])
 
           const gameAttendance: OwnerAttendance[] = (dbGameOwners || [])
             .filter((go: any) => go.game_id === g.id)
@@ -342,7 +401,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             playedAt: g.played_at,
             grossRakePaise: Number(g.gross_rake_paise),
             customAllocation: g.custom_allocation,
-            expenses: gameExpenses,
+            expenses: finalGameExpenses,
             owners: gameAttendance,
             status: g.status,
             notes: g.notes,
@@ -582,12 +641,19 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     validateOwnerAttendance(data.owners)
 
     const nextGameNumber = games.length > 0 ? Math.max(...games.map((g) => g.gameNumber)) + 1 : 1
+    const gameExpenses: SessionExpense[] = (data.expenses || []).map((e, idx) => ({
+      id: e.id || `exp-session-${Date.now()}-${idx}`,
+      description: e.description?.trim() || 'Session Expense',
+      amountPaise: e.amountPaise,
+      paidByOwnerId: e.paidByOwnerId || data.hostOwnerId,
+    }))
+
     const newGame: GameRecord = {
       id: `game-${Date.now()}`,
       gameNumber: nextGameNumber,
       playedAt: data.playedAt,
       grossRakePaise: data.grossRakePaise,
-      expenses: data.expenses,
+      expenses: gameExpenses,
       owners: data.owners,
       status: 'active',
       notes: data.notes,
@@ -696,19 +762,18 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         )
       }
 
-      if (data.expenses && data.expenses.length > 0) {
-        await client.from('expenses').insert(
-          data.expenses.map((e) => ({
-            id: e.id,
-            game_id: newGame.id,
-            amount_paise: e.amountPaise,
-            expense_type: 'session_expense',
-            description: e.description,
-            expense_date: newGame.playedAt,
-            status: 'active',
-            paid_by_owner_id: e.paidByOwnerId || null,
-          }))
-        )
+      if (gameExpenses.length > 0) {
+        const expenseRows = gameExpenses.map((e) => ({
+          id: e.id,
+          game_id: newGame.id,
+          amount_paise: e.amountPaise,
+          expense_type: 'session_expense',
+          description: e.description,
+          expense_date: newGame.playedAt,
+          status: 'active',
+          paid_by_owner_id: e.paidByOwnerId || null,
+        }))
+        await insertExpensesBatchResilient(client, expenseRows)
       }
 
       if (newRakeEntries.length > 0) {
@@ -727,17 +792,16 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       if (newPayments.length > 0) {
-        await client.from('payments').insert(
-          newPayments.map((p) => ({
-            id: p.id,
-            player_id: p.playerId,
-            amount_paise: p.amountPaise,
-            paid_at: p.paidAt,
-            status: 'active',
-            notes: p.notes,
-            received_by_owner_id: p.receivedByOwnerId || null,
-          }))
-        )
+        const paymentRows = newPayments.map((p) => ({
+          id: p.id,
+          player_id: p.playerId,
+          amount_paise: p.amountPaise,
+          paid_at: p.paidAt,
+          status: 'active',
+          notes: p.notes,
+          received_by_owner_id: p.receivedByOwnerId || null,
+        }))
+        await insertPaymentsBatchResilient(client, paymentRows)
       }
     })
 
@@ -790,6 +854,90 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     addAudit('GAME_VOIDED', 'game', gameId, {
       gameNumber: target.gameNumber,
+      reason,
+    })
+  }
+
+  // 2b. Add Session Expense to an Existing Game
+  async function addSessionExpense(
+    gameId: string,
+    expense: { description: string; amountPaise: number; paidByOwnerId?: string }
+  ): Promise<void> {
+    if (expense.amountPaise <= 0) {
+      throw new Error('Expense amount must be greater than zero.')
+    }
+    const targetGame = games.find((g) => g.id === gameId)
+    if (!targetGame) throw new Error('Game not found.')
+    if (targetGame.status === 'voided') throw new Error('Cannot add expenses to a voided game.')
+
+    const newExpense: SessionExpense = {
+      id: `exp-session-${gameId}-${Date.now()}`,
+      description: expense.description.trim() || 'Session Expense',
+      amountPaise: expense.amountPaise,
+      paidByOwnerId: expense.paidByOwnerId,
+    }
+
+    const updatedGames = games.map((g) => {
+      if (g.id === gameId) {
+        return {
+          ...g,
+          expenses: [...(g.expenses || []), newExpense],
+        }
+      }
+      return g
+    })
+
+    setGames(updatedGames)
+    persist({ games: updatedGames })
+
+    safeSupabaseOp(async (client) => {
+      const row = {
+        id: newExpense.id,
+        game_id: gameId,
+        amount_paise: newExpense.amountPaise,
+        expense_type: 'session_expense',
+        description: newExpense.description,
+        expense_date: targetGame.playedAt,
+        status: 'active',
+        paid_by_owner_id: newExpense.paidByOwnerId || null,
+      }
+      await insertExpenseResilient(client, row)
+    })
+
+    addAudit('SESSION_EXPENSE_ADDED', 'game', gameId, {
+      expenseId: newExpense.id,
+      gameNumber: targetGame.gameNumber,
+      amountPaise: newExpense.amountPaise,
+      description: newExpense.description,
+      paidByOwnerId: newExpense.paidByOwnerId,
+    })
+  }
+
+  // 2c. Remove Session Expense from an Existing Game
+  async function removeSessionExpense(gameId: string, expenseId: string, reason?: string): Promise<void> {
+    const targetGame = games.find((g) => g.id === gameId)
+    if (!targetGame) throw new Error('Game not found.')
+
+    const updatedGames = games.map((g) => {
+      if (g.id === gameId) {
+        return {
+          ...g,
+          expenses: (g.expenses || []).filter((e) => e.id !== expenseId),
+        }
+      }
+      return g
+    })
+
+    setGames(updatedGames)
+    persist({ games: updatedGames })
+
+    safeSupabaseOp(async (client) => {
+      await client.from('expenses').delete().eq('id', expenseId)
+    })
+
+    addAudit('SESSION_EXPENSE_REMOVED', 'game', gameId, {
+      expenseId,
+      gameNumber: targetGame.gameNumber,
       reason,
     })
   }
@@ -884,8 +1032,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       updatedPayments.push(newPayment)
       setPayments(updatedPayments)
 
-      safeSupabaseOp((client) =>
-        client.from('payments').insert({
+      safeSupabaseOp(async (client) => {
+        const row = {
           id: newPayment!.id,
           player_id: newPayment!.playerId,
           amount_paise: newPayment!.amountPaise,
@@ -893,8 +1041,9 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           notes: newPayment!.notes,
           status: 'active',
           received_by_owner_id: data.receivedByOwnerId || null,
-        })
-      )
+        }
+        await insertPaymentResilient(client, row)
+      })
     }
 
     persist({
@@ -940,8 +1089,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setPayments(updatedPayments)
     persist({ payments: updatedPayments })
 
-    safeSupabaseOp((client) =>
-      client.from('payments').insert({
+    safeSupabaseOp(async (client) => {
+      const row = {
         id: newPayment.id,
         player_id: newPayment.playerId,
         amount_paise: newPayment.amountPaise,
@@ -949,8 +1098,9 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         notes: newPayment.notes,
         status: 'active',
         received_by_owner_id: newPayment.receivedByOwnerId || null,
-      })
-    )
+      }
+      await insertPaymentResilient(client, row)
+    })
 
     addAudit('PAYMENT_RECORDED', 'payment', newPayment.id, {
       playerId: data.playerId,
@@ -1014,8 +1164,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setExpenses(updatedExpenses)
     persist({ expenses: updatedExpenses })
 
-    safeSupabaseOp((client) =>
-      client.from('expenses').insert({
+    safeSupabaseOp(async (client) => {
+      const row = {
         id: newExpense.id,
         game_id: newExpense.gameId,
         amount_paise: newExpense.amountPaise,
@@ -1024,8 +1174,9 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         expense_date: newExpense.expenseDate,
         status: 'active',
         paid_by_owner_id: newExpense.paidByOwnerId || null,
-      })
-    )
+      }
+      await insertExpenseResilient(client, row)
+    })
 
     addAudit('EXPENSE_RECORDED', 'expense', newExpense.id, {
       type: data.type,
@@ -1098,8 +1249,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSettlements(updatedSettlements)
     persist({ settlements: updatedSettlements })
 
-    safeSupabaseOp((client) =>
-      client.from('owner_settlements').insert({
+    safeSupabaseOp(async (client) => {
+      const row = {
         id: newSettlement.id,
         owner_id: newSettlement.ownerId,
         amount_paise: newSettlement.amountPaise,
@@ -1107,8 +1258,9 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         notes: newSettlement.notes,
         status: 'active',
         paid_by_owner_id: newSettlement.paidByOwnerId || null,
-      })
-    )
+      }
+      await insertSettlementResilient(client, row)
+    })
 
     addAudit('OWNER_SETTLEMENT_RECORDED', 'owner_settlement', newSettlement.id, {
       ownerId: data.ownerId,
@@ -1433,51 +1585,76 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // 5. Sync payments
     if (payments.length > 0) {
-      await client.from('payments').upsert(
-        payments.map((p) => ({
-          id: p.id,
-          player_id: p.playerId,
-          amount_paise: p.amountPaise,
-          paid_at: p.paidAt,
-          notes: p.notes,
-          status: p.status,
-          void_reason: p.voidReason,
-          received_by_owner_id: p.receivedByOwnerId || null,
-        }))
-      )
+      const pRows = payments.map((p) => ({
+        id: p.id,
+        player_id: p.playerId,
+        amount_paise: p.amountPaise,
+        paid_at: p.paidAt,
+        notes: p.notes,
+        status: p.status,
+        void_reason: p.voidReason,
+        received_by_owner_id: p.receivedByOwnerId || null,
+      }))
+      const { error: pErr } = await client.from('payments').upsert(pRows)
+      if (pErr && (pErr.code === '42703' || pErr.code === 'PGRST204' || pErr.message?.includes('received_by_owner_id'))) {
+        const fallback = pRows.map(({ received_by_owner_id, ...rest }) => rest)
+        await client.from('payments').upsert(fallback)
+      }
     }
 
-    // 6. Sync general expenses
-    if (expenses.length > 0) {
-      await client.from('expenses').upsert(
-        expenses.map((e) => ({
-          id: e.id,
-          game_id: e.gameId,
-          amount_paise: e.amountPaise,
-          expense_type: e.type,
-          description: e.description,
-          expense_date: e.expenseDate,
-          status: e.status,
-          void_reason: e.voidReason,
-          paid_by_owner_id: e.paidByOwnerId || null,
+    // 6. Sync expenses (both general expenses and session expenses)
+    const allExpensesToSync = [
+      ...expenses.map((e) => ({
+        id: e.id,
+        game_id: e.gameId,
+        amount_paise: e.amountPaise,
+        expense_type: e.type,
+        description: e.description,
+        expense_date: e.expenseDate,
+        status: e.status,
+        void_reason: e.voidReason,
+        paid_by_owner_id: e.paidByOwnerId || null,
+      })),
+      ...games.flatMap((g) =>
+        (g.expenses || []).map((se, idx) => ({
+          id: se.id || `exp-session-${g.id}-${idx}`,
+          game_id: g.id,
+          amount_paise: se.amountPaise,
+          expense_type: 'session_expense',
+          description: se.description,
+          expense_date: g.playedAt,
+          status: g.status === 'voided' ? 'voided' : 'active',
+          void_reason: null,
+          paid_by_owner_id: se.paidByOwnerId || null,
         }))
-      )
+      ),
+    ]
+
+    if (allExpensesToSync.length > 0) {
+      const { error: expErr } = await client.from('expenses').upsert(allExpensesToSync)
+      if (expErr && (expErr.code === '42703' || expErr.code === 'PGRST204' || expErr.message?.includes('paid_by_owner_id'))) {
+        const fallback = allExpensesToSync.map(({ paid_by_owner_id, ...rest }) => rest)
+        await client.from('expenses').upsert(fallback)
+      }
     }
 
     // 7. Sync settlements
     if (settlements.length > 0) {
-      await client.from('owner_settlements').upsert(
-        settlements.map((s) => ({
-          id: s.id,
-          owner_id: s.ownerId,
-          amount_paise: s.amountPaise,
-          settled_at: s.settledAt,
-          notes: s.notes,
-          status: s.status,
-          void_reason: s.voidReason,
-          paid_by_owner_id: s.paidByOwnerId || null,
-        }))
-      )
+      const sRows = settlements.map((s) => ({
+        id: s.id,
+        owner_id: s.ownerId,
+        amount_paise: s.amountPaise,
+        settled_at: s.settledAt,
+        notes: s.notes,
+        status: s.status,
+        void_reason: s.voidReason,
+        paid_by_owner_id: s.paidByOwnerId || null,
+      }))
+      const { error: sErr } = await client.from('owner_settlements').upsert(sRows)
+      if (sErr && (sErr.code === '42703' || sErr.code === 'PGRST204' || sErr.message?.includes('paid_by_owner_id'))) {
+        const fallback = sRows.map(({ paid_by_owner_id, ...rest }) => rest)
+        await client.from('owner_settlements').upsert(fallback)
+      }
     }
 
     // 8. Sync transfers
@@ -1616,6 +1793,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         userEmail,
         addGame,
         voidGame,
+        addSessionExpense,
+        removeSessionExpense,
         addHistoricalRake,
         addPayment,
         voidPayment,
