@@ -101,6 +101,7 @@ interface LedgerContextType {
 
   updateSettings: (newSettings: Partial<AccountingSettings>, reason?: string) => Promise<void>
   updateOwner: (ownerId: string, newName: string) => Promise<void>
+  updateOwners: (updatedOwners: { id: string; name: string }[]) => Promise<void>
   resetToInitialSeed: () => void
   exportCSV: (type: 'summary' | 'players' | 'games' | 'payments' | 'expenses' | 'settlements') => void
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
@@ -611,12 +612,38 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!newName || newName.trim() === '') {
       throw new Error('Owner name cannot be empty.')
     }
-    const updated = owners.map((o) =>
-      o.id === ownerId ? { ...o, name: newName.trim() } : o
-    )
-    setOwners(updated)
-    persist({ owners: updated })
-    addAudit('OWNER_UPDATED', 'owner', ownerId, { newName: newName.trim() })
+    const cleanName = newName.trim()
+    let updatedOwnersList: Owner[] = []
+    setOwners((prev) => {
+      updatedOwnersList = prev.map((o) =>
+        o.id === ownerId ? { ...o, name: cleanName } : o
+      )
+      persist({ owners: updatedOwnersList })
+      return updatedOwnersList
+    })
+    addAudit('OWNER_UPDATED', 'owner', ownerId, { newName: cleanName })
+  }
+
+  // 10b. Update All Owners Atomically
+  async function updateOwners(newOwners: { id: string; name: string }[]): Promise<void> {
+    for (const o of newOwners) {
+      if (!o.name || o.name.trim() === '') {
+        throw new Error('Owner name cannot be empty.')
+      }
+    }
+    const nameMap = new Map(newOwners.map((o) => [o.id, o.name.trim()]))
+    let updatedOwnersList: Owner[] = []
+    setOwners((prev) => {
+      updatedOwnersList = prev.map((o) => {
+        const mapped = nameMap.get(o.id)
+        return mapped !== undefined ? { ...o, name: mapped } : o
+      })
+      persist({ owners: updatedOwnersList })
+      return updatedOwnersList
+    })
+    addAudit('OWNERS_BULK_UPDATED', 'owners', undefined, {
+      owners: newOwners.map((o) => ({ id: o.id, name: o.name.trim() })),
+    })
   }
 
   // 11. Reset to initial seed
@@ -743,6 +770,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         recordOwnerSettlement,
         updateSettings,
         updateOwner,
+        updateOwners,
         resetToInitialSeed,
         exportCSV,
         signIn,

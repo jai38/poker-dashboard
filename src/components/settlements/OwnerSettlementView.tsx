@@ -2,11 +2,13 @@ import React, { useState } from 'react'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { formatINR, formatDateTime } from '../../lib/accounting/formatters'
 import { RecordSettlementModal } from './RecordSettlementModal'
-import { Scale, CheckCircle2, AlertCircle, PlusCircle, ArrowRight } from 'lucide-react'
+import { EditOwnersModal } from './EditOwnersModal'
+import { Scale, CheckCircle2, AlertCircle, PlusCircle, ArrowRight, Users } from 'lucide-react'
 
 export const OwnerSettlementView: React.FC = () => {
   const { owners, summary, settlements } = useLedger()
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditOwnersOpen, setIsEditOwnersOpen] = useState(false)
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | undefined>(undefined)
 
   const handleOpenForOwner = (ownerId?: string) => {
@@ -30,13 +32,23 @@ export const OwnerSettlementView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => handleOpenForOwner(undefined)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Record Payout / Settlement</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setIsEditOwnersOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-sm transition-colors"
+          >
+            <Users className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Edit Owner Names</span>
+          </button>
+
+          <button
+            onClick={() => handleOpenForOwner(undefined)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Record Payout / Settlement</span>
+          </button>
+        </div>
       </div>
 
       {/* Reconciliation Callout (Section 24) */}
@@ -232,6 +244,13 @@ export const OwnerSettlementView: React.FC = () => {
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           initialOwnerId={selectedOwnerId}
+        />
+      )}
+
+      {isEditOwnersOpen && (
+        <EditOwnersModal
+          isOpen={isEditOwnersOpen}
+          onClose={() => setIsEditOwnersOpen(false)}
         />
       )}
     </div>
