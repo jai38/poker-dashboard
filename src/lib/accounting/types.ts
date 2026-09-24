@@ -58,6 +58,7 @@ export interface HistoricalRakeEntry {
   entryDate: string | Date
   status: 'active' | 'voided'
   notes?: string
+  voidReason?: string
 }
 
 export interface PlayerPayment {
@@ -67,6 +68,7 @@ export interface PlayerPayment {
   paidAt: string | Date
   status: 'active' | 'voided'
   notes?: string
+  voidReason?: string
 }
 
 export interface GeneralExpense {
@@ -87,6 +89,7 @@ export interface OwnerSettlement {
   settledAt: string | Date
   status: 'active' | 'voided'
   notes?: string
+  voidReason?: string
 }
 
 export interface AccountingSettings {

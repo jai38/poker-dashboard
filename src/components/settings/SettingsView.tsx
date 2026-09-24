@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { parseRupeesToPaise } from '../../lib/accounting/formatters'
 import { ConfirmDialog } from '../common/ConfirmDialog'
+import { DatabaseConfigCard } from './DatabaseConfigCard'
 import { Settings, ShieldAlert, RotateCcw, Save, AlertTriangle, Users, CheckCircle2, Trash2 } from 'lucide-react'
 
 export const SettingsView: React.FC = () => {
@@ -103,9 +104,12 @@ export const SettingsView: React.FC = () => {
           <span>Accounting & Ledger Configuration</span>
         </h2>
         <p className="text-xs text-slate-400 mt-1">
-          Configure table owner partner names, core financial waterfall targets, and database state.
+          Configure cloud database synchronization, table partner names, financial waterfall targets, and database state.
         </p>
       </div>
+
+      {/* Cloud Database (Supabase) Configuration */}
+      <DatabaseConfigCard />
 
       {/* 1. Owner Names Configuration (Direct save, no reason required) */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
