@@ -113,92 +113,171 @@ export const ExpenseList: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider">
-                  <th className="py-3 px-4">Date</th>
-                  <th className="py-3 px-4">Type</th>
-                  <th className="py-3 px-4">Description</th>
-                  <th className="py-3 px-4">Associated Game</th>
-                  <th className="py-3 px-4 text-right">Amount</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {sortedExpenses.map((exp) => {
-                  const isVoided = exp.status === 'voided'
-                  const associatedGame = exp.gameId ? games.find((g) => g.id === exp.gameId) : null
+          <>
+            {/* Mobile Expense Cards (sm:hidden) */}
+            <div className="block sm:hidden divide-y divide-slate-800/60">
+              {sortedExpenses.map((exp) => {
+                const isVoided = exp.status === 'voided'
+                const associatedGame = exp.gameId ? games.find((g) => g.id === exp.gameId) : null
 
-                  return (
-                    <tr
-                      key={exp.id}
-                      className={`hover:bg-slate-800/30 transition-colors ${
-                        isVoided ? 'opacity-60 bg-rose-950/5' : ''
-                      }`}
-                    >
-                      <td className="py-3 px-4 text-slate-300 font-mono">
-                        {formatDate(exp.expenseDate)}
-                      </td>
-                      <td className="py-3 px-4">{getTypeBadge(exp.type)}</td>
-                      <td className="py-3 px-4 text-slate-200 font-medium">
-                        {exp.description}
+                return (
+                  <div
+                    key={exp.id}
+                    className={`p-3.5 space-y-2.5 ${
+                      isVoided ? 'opacity-60 bg-rose-950/5' : ''
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {getTypeBadge(exp.type)}
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                              isVoided
+                                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            }`}
+                          >
+                            {isVoided ? 'Voided' : 'Active'}
+                          </span>
+                        </div>
+                        <h4 className="font-semibold text-sm text-slate-100">{exp.description}</h4>
                         {isVoided && exp.voidReason && (
-                          <div className="text-[10px] text-rose-400 mt-0.5">
-                            Void Reason: {exp.voidReason}
-                          </div>
+                          <p className="text-[11px] text-rose-400">
+                            Reason: {exp.voidReason}
+                          </p>
                         )}
-                      </td>
-                      <td className="py-3 px-4 text-slate-400">
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span
+                          className={`text-base font-mono font-bold ${
+                            exp.type === 'credit_adjustment' ? 'text-emerald-400' : 'text-rose-400'
+                          }`}
+                        >
+                          {exp.type === 'credit_adjustment' ? '+ ' : '- '}
+                          {formatINR(exp.amountPaise)}
+                        </span>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          {formatDate(exp.expenseDate)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-800/50 text-xs">
+                      <span className="text-slate-400">
                         {associatedGame ? (
                           <span className="font-mono text-indigo-400">
                             Game #{associatedGame.gameNumber}
                           </span>
                         ) : (
-                          <span className="text-slate-500 italic">No game (Monthly)</span>
+                          <span className="text-slate-500 italic text-[11px]">Monthly General</span>
                         )}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-bold">
-                        <span
-                          className={
-                            exp.type === 'credit_adjustment' ? 'text-emerald-400' : 'text-rose-400'
-                          }
+                      </span>
+
+                      {!isVoided && (
+                        <button
+                          onClick={() => setVoidingExpenseId(exp.id)}
+                          className="px-2.5 py-1 text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-md transition-colors flex items-center gap-1"
                         >
-                          {exp.type === 'credit_adjustment' ? '+ ' : '- '}
-                          {formatINR(exp.amountPaise)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            isVoided
-                              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          }`}
-                        >
-                          {isVoided ? 'Voided' : 'Active'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        {!isVoided ? (
-                          <button
-                            onClick={() => setVoidingExpenseId(exp.id)}
-                            className="p-1 text-slate-400 hover:text-rose-400 rounded transition-colors"
-                            title="Void Expense"
+                          <Ban className="w-3 h-3" />
+                          <span>Void</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Desktop Table (hidden sm:block) */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider">
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4">Type</th>
+                    <th className="py-3 px-4">Description</th>
+                    <th className="py-3 px-4">Associated Game</th>
+                    <th className="py-3 px-4 text-right">Amount</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {sortedExpenses.map((exp) => {
+                    const isVoided = exp.status === 'voided'
+                    const associatedGame = exp.gameId ? games.find((g) => g.id === exp.gameId) : null
+
+                    return (
+                      <tr
+                        key={exp.id}
+                        className={`hover:bg-slate-800/30 transition-colors ${
+                          isVoided ? 'opacity-60 bg-rose-950/5' : ''
+                        }`}
+                      >
+                        <td className="py-3 px-4 text-slate-300 font-mono">
+                          {formatDate(exp.expenseDate)}
+                        </td>
+                        <td className="py-3 px-4">{getTypeBadge(exp.type)}</td>
+                        <td className="py-3 px-4 text-slate-200 font-medium">
+                          {exp.description}
+                          {isVoided && exp.voidReason && (
+                            <div className="text-[10px] text-rose-400 mt-0.5">
+                              Void Reason: {exp.voidReason}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-slate-400">
+                          {associatedGame ? (
+                            <span className="font-mono text-indigo-400">
+                              Game #{associatedGame.gameNumber}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 italic">No game (Monthly)</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold">
+                          <span
+                            className={
+                              exp.type === 'credit_adjustment' ? 'text-emerald-400' : 'text-rose-400'
+                            }
                           >
-                            <Ban className="w-3.5 h-3.5" />
-                          </button>
-                        ) : (
-                          <span className="text-slate-600 text-[10px]">Voided</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                            {exp.type === 'credit_adjustment' ? '+ ' : '- '}
+                            {formatINR(exp.amountPaise)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                              isVoided
+                                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            }`}
+                          >
+                            {isVoided ? 'Voided' : 'Active'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {!isVoided ? (
+                            <button
+                              onClick={() => setVoidingExpenseId(exp.id)}
+                              className="p-1 text-slate-400 hover:text-rose-400 rounded transition-colors"
+                              title="Void Expense"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <span className="text-slate-600 text-[10px]">Voided</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

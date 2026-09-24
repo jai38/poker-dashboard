@@ -48,9 +48,37 @@ export const AuditLogView: React.FC = () => {
         </p>
       </div>
 
-      {/* Audit Log Table (Section 27) */}
+      {/* Audit Log (Section 27) */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        {/* Mobile View (sm:hidden) */}
+        <div className="block sm:hidden divide-y divide-slate-800/60">
+          {auditLog.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-500">No audit events recorded.</div>
+          ) : (
+            auditLog.map((entry) => (
+              <div key={entry.id} className="p-3.5 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  {getActionBadge(entry.action)}
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {formatDateTime(entry.timestamp)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-400">Target:</span>
+                  <span className="font-semibold text-slate-200">{entry.entityType}</span>
+                </div>
+                {entry.metadata && Object.keys(entry.metadata).length > 0 && (
+                  <div className="p-2 bg-slate-950/70 rounded border border-slate-800/60 text-[11px] font-mono text-slate-300 break-words">
+                    {JSON.stringify(entry.metadata, null, 1).replace(/[{\n}]/g, '').trim()}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop Table (hidden sm:block) */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase tracking-wider">

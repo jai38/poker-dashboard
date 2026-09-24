@@ -32,8 +32,8 @@ const LedgerAppContent: React.FC = () => {
         onOpenQuickRake={() => setIsQuickRakeOpen(true)}
       />
 
-      {/* Main View Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main View Area with mobile bottom bar padding */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 md:pb-8">
         {activeTab === 'dashboard' && (
           <DashboardOverview
             onNavigateToGames={() => setActiveTab('games')}

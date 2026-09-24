@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
+import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { formatINR, parseRupeesToPaise } from '../../lib/accounting/formatters'
-import { ArrowRightLeft, X, AlertCircle } from 'lucide-react'
+import { ArrowRightLeft, AlertCircle } from 'lucide-react'
 
 interface AddBucketTransferModalProps {
   isOpen: boolean
@@ -20,8 +21,6 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  if (!isOpen) return null
 
   const tableBalance = summary.tableRecoveryAccumulatedPaise
   const festivalBalance = summary.festivalFundAccumulatedPaise
@@ -73,29 +72,14 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
-              <ArrowRightLeft className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-100">Reallocate / Transfer Funds</h3>
-              <p className="text-[11px] text-slate-400">Manage custom allocation between ledger buckets</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-200 transition-colors p-1 rounded-lg hover:bg-slate-800"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Reallocate / Transfer Funds"
+      subtitle="Manage custom allocation between ledger buckets"
+      maxWidth="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -218,7 +202,6 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }

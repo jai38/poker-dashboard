@@ -154,7 +154,7 @@ export const SettingsView: React.FC = () => {
                       setOwnerNames((prev) => ({ ...prev, [owner.id]: e.target.value }))
                     }
                     placeholder={`e.g. Partner ${idx + 1}`}
-                    className="w-full pl-9 pr-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full pl-9 pr-3 py-2 text-base sm:text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
                     required
                   />
                 </div>
@@ -166,7 +166,7 @@ export const SettingsView: React.FC = () => {
             <button
               type="submit"
               disabled={isSavingOwners}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white shadow-sm transition-colors"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white shadow-sm transition-colors min-h-[40px]"
             >
               <Save className="w-3.5 h-3.5" />
               <span>{isSavingOwners ? 'Saving...' : 'Save Owner Names'}</span>
@@ -210,11 +210,12 @@ export const SettingsView: React.FC = () => {
                   <span className="absolute left-3 top-2 text-sm text-slate-500">₹</span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     min="0"
                     step="any"
                     value={tableTargetRupees}
                     onChange={(e) => setTableTargetRupees(e.target.value)}
-                    className="w-full pl-7 pr-3 py-2 text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full pl-7 pr-3 py-2 text-base sm:text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
                     required
                   />
                 </div>
@@ -229,11 +230,12 @@ export const SettingsView: React.FC = () => {
                   <span className="absolute left-3 top-2 text-sm text-slate-500">₹</span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     min="0"
                     step="any"
                     value={festivalTargetRupees}
                     onChange={(e) => setFestivalTargetRupees(e.target.value)}
-                    className="w-full pl-7 pr-3 py-2 text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full pl-7 pr-3 py-2 text-base sm:text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
                     required
                   />
                 </div>
@@ -248,11 +250,12 @@ export const SettingsView: React.FC = () => {
                   <span className="absolute left-3 top-2 text-sm text-slate-500">₹</span>
                   <input
                     type="number"
+                    inputMode="decimal"
                     min="0"
                     step="any"
                     value={equalThresholdRupees}
                     onChange={(e) => setEqualThresholdRupees(e.target.value)}
-                    className="w-full pl-7 pr-3 py-2 text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full pl-7 pr-3 py-2 text-base sm:text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
                     required
                   />
                 </div>
@@ -266,12 +269,13 @@ export const SettingsView: React.FC = () => {
                 <div className="relative">
                   <input
                     type="number"
+                    inputMode="decimal"
                     min="0"
                     max="100"
                     step="1"
                     value={absentPercentage}
                     onChange={(e) => setAbsentPercentage(e.target.value)}
-                    className="w-full pl-3 pr-8 py-2 text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full pl-3 pr-8 py-2 text-base sm:text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
                     required
                   />
                   <span className="absolute right-3 top-2 text-sm text-slate-500">%</span>
@@ -284,7 +288,7 @@ export const SettingsView: React.FC = () => {
           <div className="flex items-center justify-end">
             <button
               type="submit"
-              className="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-sm transition-colors"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-sm transition-colors min-h-[40px]"
             >
               <Save className="w-4 h-4 text-slate-400" />
               <span>Save Financial Targets</span>

@@ -121,8 +121,90 @@ export const PlayerList: React.FC = () => {
         />
       </div>
 
-      {/* Players Table (Section 21) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+      {/* Mobile Players Cards (sm:hidden) */}
+      <div className="block sm:hidden space-y-3">
+        {/* Mobile Summary Pill */}
+        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl grid grid-cols-3 gap-2 text-center text-xs">
+          <div>
+            <span className="text-[10px] text-slate-500 block uppercase">Players</span>
+            <span className="font-bold text-slate-200">{playerRows.length}</span>
+          </div>
+          <div>
+            <span className="text-[10px] text-slate-500 block uppercase">Collected</span>
+            <span className="font-bold text-emerald-400 font-mono">{formatINR(totalPaid)}</span>
+          </div>
+          <div>
+            <span className="text-[10px] text-slate-500 block uppercase">Total Due</span>
+            <span className="font-bold text-amber-400 font-mono">{formatINR(totalOutstanding)}</span>
+          </div>
+        </div>
+
+        {filteredRows.length === 0 ? (
+          <div className="p-8 text-center text-xs text-slate-500 bg-slate-900 border border-slate-800 rounded-xl">
+            No players found matching "{search}".
+          </div>
+        ) : (
+          filteredRows.map(({ player, generatedPaise, paidPaise, outstandingPaise }) => (
+            <div
+              key={player.id}
+              onClick={() => setSelectedPlayer(player)}
+              className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 space-y-3 active:bg-slate-800/60 transition-colors shadow-sm"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-indigo-300">
+                    {player.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm text-slate-100">{player.name}</h4>
+                    <span className="text-[10px] text-slate-400">Tap for complete ledger</span>
+                  </div>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded text-xs font-mono font-bold ${
+                    outstandingPaise > 0
+                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  {outstandingPaise > 0 ? `Due ${formatINR(outstandingPaise)}` : 'Cleared'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/60 text-xs">
+                <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/50">
+                  <span className="text-[10px] text-slate-400 block font-sans uppercase">Total Rake</span>
+                  <span className="font-mono font-bold text-slate-200">{formatINR(generatedPaise)}</span>
+                </div>
+                <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/50">
+                  <span className="text-[10px] text-slate-400 block font-sans uppercase">Total Paid</span>
+                  <span className="font-mono font-bold text-emerald-400">{formatINR(paidPaise)}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => handleOpenAddPaymentFor(player.id)}
+                  disabled={outstandingPaise === 0}
+                  className="flex-1 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:hover:bg-emerald-600 text-white transition-colors flex items-center justify-center gap-1.5 shadow-sm min-h-[38px]"
+                >
+                  <Wallet className="w-3.5 h-3.5" />
+                  <span>Record Payment</span>
+                </button>
+                <button
+                  onClick={() => setSelectedPlayer(player)}
+                  className="px-3.5 py-2 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition-colors min-h-[38px]"
+                >
+                  History
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Players Table for Tablet/Desktop (hidden sm:block) */}
+      <div className="hidden sm:block bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>

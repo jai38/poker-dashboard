@@ -41,12 +41,12 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           {/* Status Filter */}
           <div className="bg-slate-900 border border-slate-800 rounded-lg p-0.5 flex text-xs">
             <button
               onClick={() => setFilter('all')}
-              className={`px-3 py-1 rounded-md font-medium transition-colors ${
+              className={`flex-1 sm:flex-initial text-center px-3 py-1.5 rounded-md font-medium transition-colors ${
                 filter === 'all'
                   ? 'bg-slate-800 text-slate-100'
                   : 'text-slate-400 hover:text-slate-200'
@@ -56,7 +56,7 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
             </button>
             <button
               onClick={() => setFilter('active')}
-              className={`px-3 py-1 rounded-md font-medium transition-colors ${
+              className={`flex-1 sm:flex-initial text-center px-3 py-1.5 rounded-md font-medium transition-colors ${
                 filter === 'active'
                   ? 'bg-slate-800 text-slate-100'
                   : 'text-slate-400 hover:text-slate-200'
@@ -66,7 +66,7 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
             </button>
             <button
               onClick={() => setFilter('voided')}
-              className={`px-3 py-1 rounded-md font-medium transition-colors ${
+              className={`flex-1 sm:flex-initial text-center px-3 py-1.5 rounded-md font-medium transition-colors ${
                 filter === 'voided'
                   ? 'bg-slate-800 text-slate-100'
                   : 'text-slate-400 hover:text-slate-200'
@@ -78,10 +78,10 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
 
           <button
             onClick={onOpenAddGame}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors min-h-[38px] sm:min-h-0"
           >
             <PlusCircle className="w-4 h-4" />
-            <span>New Game</span>
+            <span>Record New Game</span>
           </button>
         </div>
       </div>
@@ -113,15 +113,15 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
             return (
               <div
                 key={game.id}
-                className={`bg-slate-900 border rounded-xl p-5 transition-all shadow-sm ${
+                className={`bg-slate-900 border rounded-xl p-4 sm:p-5 transition-all shadow-sm ${
                   isVoided
                     ? 'border-rose-900/40 bg-rose-950/10 opacity-75'
                     : 'border-slate-800 hover:border-slate-700'
                 }`}
               >
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 border-b border-slate-800/80">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center font-bold text-sm text-indigo-400">
+                    <div className="w-10 h-10 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center font-bold text-sm text-indigo-400 shrink-0">
                       #{game.gameNumber}
                     </div>
                     <div>
@@ -146,10 +146,10 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
                     <button
                       onClick={() => setSelectedGame(game)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+                      className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors min-h-[38px]"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       <span>Details & Breakdown</span>

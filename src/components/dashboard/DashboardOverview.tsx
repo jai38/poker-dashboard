@@ -307,7 +307,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               </button>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-800 text-slate-400 text-xs font-medium">
@@ -361,6 +362,42 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   </tr>
                 </tfoot>
               </table>
+            </div>
+
+            {/* Mobile Cards View (Zero Horizontal Scroll Needed) */}
+            <div className="sm:hidden space-y-2.5">
+              {owners.map((owner) => {
+                const ent = summary.ownerEntitlements[owner.id]
+                const gross = ent?.grossEntitlementPaise || 0
+                return (
+                  <div
+                    key={owner.id}
+                    className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-lg flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="font-semibold text-slate-200 text-sm">{owner.name}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 space-x-1.5 font-mono">
+                        <span>Eq: {formatINR(ent?.equalSharePaise || 0)}</span>
+                        <span>·</span>
+                        <span>Ex: {formatINR(ent?.excessSharePaise || 0)}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold font-mono text-emerald-400">
+                        {formatINR(gross)}
+                      </div>
+                      <span className="text-[10px] text-slate-400">Total Entitled</span>
+                    </div>
+                  </div>
+                )
+              })}
+
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs font-bold px-1">
+                <span className="text-slate-400">Total Entitlement:</span>
+                <span className="text-emerald-400 font-mono text-sm">
+                  {formatINR(summary.totalOwnerEntitlementPaise)}
+                </span>
+              </div>
             </div>
           </div>
 

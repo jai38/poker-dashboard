@@ -359,7 +359,7 @@ export const DatabaseConfigCard: React.FC = () => {
               onChange={(e) => setUrl(e.target.value)}
               onBlur={() => setUrl(normalizeSupabaseUrl(url))}
               placeholder="https://xyzabcdefg.supabase.co"
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-base sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
             />
           </div>
 
@@ -382,7 +382,7 @@ export const DatabaseConfigCard: React.FC = () => {
               value={anonKey}
               onChange={(e) => setAnonKey(e.target.value)}
               placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-base sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
             />
           </div>
         </div>
@@ -405,12 +405,12 @@ export const DatabaseConfigCard: React.FC = () => {
           </div>
         )}
 
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-2">
           <button
             type="button"
             onClick={handleTestConnection}
             disabled={isTesting}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700 transition disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700 transition disabled:opacity-50 min-h-[40px]"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
             {isTesting ? 'Testing...' : 'Test Connection'}
@@ -418,10 +418,10 @@ export const DatabaseConfigCard: React.FC = () => {
 
           <button
             type="submit"
-            className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-emerald-900/30 transition"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-emerald-900/30 transition min-h-[40px]"
           >
             <Check className="w-4 h-4" />
-            Save & Connect Database
+            <span>Save & Connect Database</span>
           </button>
         </div>
       </form>
