@@ -1010,13 +1010,17 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return updatedOwnersList
     })
 
-    safeSupabaseOp((client) =>
-      client.from('owners').upsert({
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('owners').upsert({
         id: ownerId,
         name: cleanName,
         is_active: true,
       })
-    )
+      if (error) {
+        console.error('Supabase owner update error:', error)
+        throw new Error(`Failed to save owner to cloud database: ${error.message}`)
+      }
+    }
 
     addAudit('OWNER_UPDATED', 'owner', ownerId, { newName: cleanName })
   }
@@ -1039,15 +1043,19 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return updatedOwnersList
     })
 
-    safeSupabaseOp((client) =>
-      client.from('owners').upsert(
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('owners').upsert(
         newOwners.map((o) => ({
           id: o.id,
           name: o.name.trim(),
           is_active: true,
         }))
       )
-    )
+      if (error) {
+        console.error('Supabase owners bulk update error:', error)
+        throw new Error(`Failed to save owner names to cloud database: ${error.message}`)
+      }
+    }
 
     addAudit('OWNERS_BULK_UPDATED', 'owners', undefined, {
       owners: newOwners.map((o) => ({ id: o.id, name: o.name.trim() })),

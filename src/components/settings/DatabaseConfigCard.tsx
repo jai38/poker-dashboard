@@ -4,6 +4,7 @@ import {
   saveCustomSupabaseConfig,
   clearCustomSupabaseConfig,
   testSupabaseConnection,
+  normalizeSupabaseUrl,
 } from '../../lib/supabase/client'
 import { useLedger } from '../../lib/store/ledgerStore'
 import {
@@ -356,6 +357,7 @@ export const DatabaseConfigCard: React.FC = () => {
               type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              onBlur={() => setUrl(normalizeSupabaseUrl(url))}
               placeholder="https://xyzabcdefg.supabase.co"
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
             />
