@@ -267,8 +267,8 @@ export function calculateLedgerSummary(params: {
 
   const activeOwners = owners.filter((o) => o.isActive)
 
-  // 1. Total Rake Generated & Collected
-  const activeHistorical = historicalRake.filter((h) => h.status === 'active')
+  // 1. Total Rake Generated & Collected (historical entries without gameId + game gross rakes)
+  const activeHistorical = historicalRake.filter((h) => h.status === 'active' && !h.gameId)
   const activeGames = games.filter((g) => g.status === 'active')
   const activePayments = payments.filter((p) => p.status === 'active')
   const activeExpenses = expenses.filter((e) => e.status === 'active')

@@ -55,11 +55,21 @@ export interface BucketTransfer {
 export interface HistoricalRakeEntry {
   id: string
   playerId: string
+  gameId?: string
+  entryType?: 'game' | 'historical'
   amountPaise: number
   entryDate: string | Date
   status: 'active' | 'voided'
   notes?: string
   voidReason?: string
+}
+
+export interface GamePlayerRakeInput {
+  playerId?: string
+  playerName?: string
+  amountPaise: number
+  isPaid?: boolean
+  receivedByOwnerId?: string
 }
 
 export interface PlayerPayment {

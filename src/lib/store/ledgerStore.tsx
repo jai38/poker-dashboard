@@ -18,6 +18,7 @@ import {
   SessionExpense,
   BucketTransfer,
   CustomGameAllocation,
+  GamePlayerRakeInput,
 } from '../accounting/types'
 import {
   INITIAL_OWNERS,
@@ -65,6 +66,8 @@ interface LedgerContextType {
     owners: OwnerAttendance[]
     notes?: string
     customAllocation?: CustomGameAllocation
+    playerRakes?: GamePlayerRakeInput[]
+    hostOwnerId?: string
   }) => Promise<GameRecord>
 
   voidGame: (gameId: string, reason: string) => Promise<void>
@@ -351,17 +354,17 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       let loadedRake: HistoricalRakeEntry[] = []
       if (dbRake) {
-        loadedRake = dbRake
-          .filter((r: any) => r.entry_type === 'historical')
-          .map((r: any) => ({
-            id: r.id,
-            playerId: r.player_id,
-            amountPaise: Number(r.amount_paise),
-            entryDate: r.entry_date,
-            status: r.status,
-            notes: r.notes,
-            voidReason: r.void_reason,
-          }))
+        loadedRake = dbRake.map((r: any) => ({
+          id: r.id,
+          playerId: r.player_id,
+          gameId: r.game_id || undefined,
+          entryType: r.entry_type || 'historical',
+          amountPaise: Number(r.amount_paise),
+          entryDate: r.entry_date,
+          status: r.status,
+          notes: r.notes,
+          voidReason: r.void_reason,
+        }))
         setHistoricalRake(loadedRake)
       }
 
@@ -570,6 +573,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     owners: OwnerAttendance[]
     notes?: string
     customAllocation?: CustomGameAllocation
+    playerRakes?: GamePlayerRakeInput[]
+    hostOwnerId?: string
   }): Promise<GameRecord> {
     if (data.grossRakePaise < 0) {
       throw new Error('Gross rake cannot be negative.')
@@ -589,9 +594,85 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       customAllocation: data.customAllocation,
     }
 
+    let updatedPlayers = [...players]
+    const newRakeEntries: HistoricalRakeEntry[] = []
+    const newPayments: PlayerPayment[] = []
+
+    if (data.playerRakes && data.playerRakes.length > 0) {
+      data.playerRakes.forEach((pr, idx) => {
+        if (pr.amountPaise <= 0) return
+
+        let targetPlayerId = pr.playerId
+        if (!targetPlayerId && pr.playerName) {
+          const existing = updatedPlayers.find(
+            (p) => p.name.trim().toLowerCase() === pr.playerName?.trim().toLowerCase()
+          )
+          if (existing) {
+            targetPlayerId = existing.id
+          } else {
+            const newP: Player = {
+              id: `player-${Date.now()}-${idx}`,
+              name: pr.playerName.trim(),
+              createdAt: new Date().toISOString(),
+            }
+            updatedPlayers.push(newP)
+            targetPlayerId = newP.id
+            safeSupabaseOp((client) =>
+              client.from('players').insert({
+                id: newP.id,
+                name: newP.name,
+                created_at: newP.createdAt,
+              })
+            )
+          }
+        }
+
+        if (targetPlayerId) {
+          const rakeEntry: HistoricalRakeEntry = {
+            id: `hist-${Date.now()}-${idx}`,
+            playerId: targetPlayerId,
+            gameId: newGame.id,
+            entryType: 'game',
+            amountPaise: pr.amountPaise,
+            entryDate: data.playedAt,
+            status: 'active',
+            notes: `Game #${nextGameNumber} rake contribution`,
+          }
+          newRakeEntries.push(rakeEntry)
+
+          if (pr.isPaid) {
+            newPayments.push({
+              id: `pay-${Date.now()}-${idx}`,
+              playerId: targetPlayerId,
+              amountPaise: pr.amountPaise,
+              paidAt: data.playedAt,
+              status: 'active',
+              notes: `Game #${nextGameNumber} rake paid on the spot`,
+              receivedByOwnerId: pr.receivedByOwnerId || data.hostOwnerId,
+            })
+          }
+        }
+      })
+    }
+
+    if (updatedPlayers.length !== players.length) {
+      setPlayers(updatedPlayers)
+    }
+
     const updatedGames = [...games, newGame]
+    const updatedHistorical = [...historicalRake, ...newRakeEntries]
+    const updatedPayments = [...payments, ...newPayments]
+
     setGames(updatedGames)
-    persist({ games: updatedGames })
+    setHistoricalRake(updatedHistorical)
+    setPayments(updatedPayments)
+
+    persist({
+      games: updatedGames,
+      players: updatedPlayers,
+      historicalRake: updatedHistorical,
+      payments: updatedPayments,
+    })
 
     // Cloud DB write
     safeSupabaseOp(async (client) => {
@@ -629,6 +710,35 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }))
         )
       }
+
+      if (newRakeEntries.length > 0) {
+        await client.from('rake_entries').insert(
+          newRakeEntries.map((r) => ({
+            id: r.id,
+            player_id: r.playerId,
+            game_id: newGame.id,
+            amount_paise: r.amountPaise,
+            entry_type: 'game',
+            entry_date: r.entryDate,
+            notes: r.notes,
+            status: 'active',
+          }))
+        )
+      }
+
+      if (newPayments.length > 0) {
+        await client.from('payments').insert(
+          newPayments.map((p) => ({
+            id: p.id,
+            player_id: p.playerId,
+            amount_paise: p.amountPaise,
+            paid_at: p.paidAt,
+            status: 'active',
+            notes: p.notes,
+            received_by_owner_id: p.receivedByOwnerId || null,
+          }))
+        )
+      }
     })
 
     addAudit('GAME_CREATED', 'game', newGame.id, {
@@ -636,7 +746,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       grossRakePaise: newGame.grossRakePaise,
       expensesCount: data.expenses.length,
       ownersPresent: data.owners.filter((o) => o.present).map((o) => o.ownerId),
-      customAllocation: data.customAllocation,
+      playerRakesCount: newRakeEntries.length,
     })
 
     return newGame
@@ -655,15 +765,28 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const updatedGames: GameRecord[] = games.map((g) =>
       g.id === gameId ? { ...g, status: 'voided', voidReason: reason } : g
     )
-    setGames(updatedGames)
-    persist({ games: updatedGames })
 
-    safeSupabaseOp((client) =>
-      client.from('games').update({
+    const updatedHistorical = historicalRake.map((h) =>
+      h.gameId === gameId
+        ? { ...h, status: 'voided' as const, voidReason: `Voided with game: ${reason}` }
+        : h
+    )
+
+    setGames(updatedGames)
+    setHistoricalRake(updatedHistorical)
+    persist({ games: updatedGames, historicalRake: updatedHistorical })
+
+    safeSupabaseOp(async (client) => {
+      await client.from('games').update({
         status: 'voided',
         void_reason: reason,
       }).eq('id', gameId)
-    )
+
+      await client.from('rake_entries').update({
+        status: 'voided',
+        void_reason: `Voided with game: ${reason}`,
+      }).eq('game_id', gameId)
+    })
 
     addAudit('GAME_VOIDED', 'game', gameId, {
       gameNumber: target.gameNumber,

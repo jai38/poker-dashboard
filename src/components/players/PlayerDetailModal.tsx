@@ -144,8 +144,12 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
                           <span className="font-mono font-bold text-slate-100">
                             {formatINR(h.amountPaise)}
                           </span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 uppercase font-semibold">
-                            Historical
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
+                            h.entryType === 'game' || h.gameId
+                              ? 'bg-indigo-950/80 text-indigo-400 border border-indigo-800/60'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}>
+                            {h.entryType === 'game' || h.gameId ? 'Game Session' : 'Direct Entry'}
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-400 mt-0.5">

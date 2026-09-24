@@ -715,6 +715,76 @@ describe('Pure Accounting Engine Specification Tests', () => {
     // Owner 1 remaining entitlement = ₹1,000, so net position = 1,000 - 3,000 = -2,000 (holding remaining ₹2,000 for o3 and o4)
     expect(summary.ownerEntitlements['o1'].netPositionPaise).toBe(-2000 * 100)
   })
+
+  // Test 25: Game player rake attribution & host expense reimbursement
+  it('Test 25: Does not double count game-attributed player rake and credits host for session expenses', () => {
+    // Game 1: ₹4,500 gross rake, ₹500 refreshments paid by Owner 1 (host)
+    const games: GameRecord[] = [
+      {
+        id: 'g1',
+        gameNumber: 1,
+        playedAt: '2026-09-01T20:00:00Z',
+        grossRakePaise: 4500 * 100,
+        expenses: [
+          {
+            amountPaise: 500 * 100,
+            description: 'Refreshments',
+            paidByOwnerId: 'o1', // Host paid out of pocket
+          },
+        ],
+        owners: defaultOwners,
+        status: 'active',
+      },
+    ]
+
+    // Individual player rake contributions attributed to this game (Player A: ₹2,500, Player B: ₹2,000)
+    const historicalRake = [
+      {
+        id: 'hist-g1-1',
+        playerId: 'p1',
+        gameId: 'g1',
+        entryType: 'game' as const,
+        amountPaise: 2500 * 100,
+        entryDate: '2026-09-01T20:00:00Z',
+        status: 'active' as const,
+      },
+      {
+        id: 'hist-g1-2',
+        playerId: 'p2',
+        gameId: 'g1',
+        entryType: 'game' as const,
+        amountPaise: 2000 * 100,
+        entryDate: '2026-09-01T20:00:00Z',
+        status: 'active' as const,
+      },
+      // Standalone historical entry not in game
+      {
+        id: 'hist-standalone',
+        playerId: 'p3',
+        amountPaise: 1000 * 100,
+        entryDate: '2026-09-02T10:00:00Z',
+        status: 'active' as const,
+      },
+    ]
+
+    const summary = calculateLedgerSummary({
+      owners: mockOwnerDefs,
+      games,
+      historicalRake,
+      payments: [],
+      expenses: [],
+      settlements: [],
+    })
+
+    // Total rake generated must be ₹4,500 (game) + ₹1,000 (standalone) = ₹5,500 (NOT double counting the ₹4,500 player entries)
+    expect(summary.totalRakeGeneratedPaise).toBe(5500 * 100)
+
+    // Host (Owner 1) must be credited for ₹500 out-of-pocket expense
+    expect(summary.ownerEntitlements['o1'].expensesPaidPaise).toBe(500 * 100)
+    // Owner 1 net cash held is -₹500 because they paid out of pocket without collecting payments yet
+    expect(summary.ownerEntitlements['o1'].netCashHeldPaise).toBe(-500 * 100)
+    expect(summary.reconciled).toBe(true)
+  })
 })
 
 
