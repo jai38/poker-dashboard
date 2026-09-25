@@ -48,8 +48,8 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Player Ledger: ${player.name}`}
-      subtitle="Complete player transaction history and balance"
+      title={`Member Ledger: ${player.name}`}
+      subtitle="Complete member transaction history and balance"
       maxWidth="lg"
     >
       <div className="space-y-6">
@@ -79,7 +79,7 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons (Section 21) */}
+        {/* Action Buttons */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
@@ -89,7 +89,7 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
             className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
           >
             <PlusCircle className="w-3.5 h-3.5 text-indigo-400" />
-            <span>+ Add Rake</span>
+            <span>+ Add Fee</span>
           </button>
           <button
             onClick={() => {
@@ -104,7 +104,7 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
           </button>
         </div>
 
-        {/* Tab switch: Rake entries vs Payments */}
+        {/* Tab switch: Fee entries vs Payments */}
         <div>
           <div className="flex border-b border-slate-800 text-xs font-medium mb-3">
             <button
@@ -115,7 +115,7 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
-              Rake Generated Entries ({playerRakeEntries.length})
+              Fee Entries ({playerRakeEntries.length})
             </button>
             <button
               onClick={() => setActiveTab('payments')}
@@ -133,7 +133,7 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
             <div className="space-y-2">
               {playerRakeEntries.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-500 bg-slate-950/50 rounded-lg border border-slate-800">
-                  No rake entries recorded for this player.
+                  No fee entries recorded for this member.
                 </div>
               ) : (
                 <div className="divide-y divide-slate-800/60 bg-slate-950 rounded-lg border border-slate-800 overflow-hidden">
@@ -149,7 +149,7 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
                               ? 'bg-indigo-950/80 text-indigo-400 border border-indigo-800/60'
                               : 'bg-slate-800 text-slate-400'
                           }`}>
-                            {h.entryType === 'game' || h.gameId ? 'Game Session' : 'Direct Entry'}
+                            {h.entryType === 'game' || h.gameId ? 'Session Activity' : 'Direct Entry'}
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-400 mt-0.5">
@@ -165,7 +165,7 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
             <div className="space-y-2">
               {playerPayments.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-500 bg-slate-950/50 rounded-lg border border-slate-800">
-                  No payments recorded yet for this player.
+                  No payments recorded yet for this member.
                 </div>
               ) : (
                 <div className="divide-y divide-slate-800/60 bg-slate-950 rounded-lg border border-slate-800 overflow-hidden">

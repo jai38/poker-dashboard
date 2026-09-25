@@ -29,7 +29,7 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
   const [settledAt, setSettledAt] = useState<string>(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState<string>(
     initialPayerId
-      ? `P2P transfer from ${owners.find((o) => o.id === initialPayerId)?.name || 'Partner'}`
+      ? `P2P transfer from ${owners.find((o) => o.id === initialPayerId)?.name || 'Organizer'}`
       : ''
   )
   const [error, setError] = useState<string>('')
@@ -48,7 +48,7 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
     setError('')
 
     if (!selectedOwnerId) {
-      setError('Please select an owner.')
+      setError('Please select an organizer.')
       return
     }
 
@@ -61,7 +61,7 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
 
     if (maxAllowedPaise > 0 && amountPaise > maxAllowedPaise) {
       setError(
-        `Settlement amount (${formatINR(amountPaise)}) exceeds owner's receivable balance (${formatINR(
+        `Settlement amount (${formatINR(amountPaise)}) exceeds organizer's receivable balance (${formatINR(
           maxAllowedPaise
         )}).`
       )
@@ -78,7 +78,7 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
       })
       handleResetAndClose()
     } catch (err: any) {
-      setError(err.message || 'Failed to record owner settlement.')
+      setError(err.message || 'Failed to record organizer settlement.')
     }
   }
 
@@ -90,7 +90,7 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleResetAndClose} title="Record Owner Settlement Payment" maxWidth="md">
+    <Modal isOpen={isOpen} onClose={handleResetAndClose} title="Record Organizer Settlement" maxWidth="md">
       <form onSubmit={handleSave} className="space-y-4">
         {error && (
           <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs font-medium text-rose-400">
@@ -99,10 +99,10 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
           </div>
         )}
 
-        {/* Owner Selector */}
+        {/* Organizer Selector */}
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-slate-300">
-            Owner <span className="text-rose-400">*</span>
+            Organizer <span className="text-rose-400">*</span>
           </label>
           <select
             value={selectedOwnerId}
@@ -128,14 +128,14 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
             <span>Paid By (Source of Funds)</span>
-            <span className="text-[10px] text-indigo-400 font-normal">P2P or Table Pool</span>
+            <span className="text-[10px] text-indigo-400 font-normal">P2P or Activity Pool</span>
           </label>
           <select
             value={paidByOwnerId}
             onChange={(e) => setPaidByOwnerId(e.target.value)}
             className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
           >
-            <option value="">Shared Table Cash Pool</option>
+            <option value="">Shared Activity Cash Pool</option>
             {owners
               .filter((o) => o.id !== selectedOwnerId)
               .map((o) => {

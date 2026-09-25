@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import { useLedger } from '../../lib/store/ledgerStore'
-import { formatINR, formatDate, formatDateTime } from '../../lib/accounting/formatters'
+import { formatINR, formatDateTime } from '../../lib/accounting/formatters'
 import { GameRecord } from '../../lib/accounting/types'
 import { GameDetailsModal } from './GameDetailsModal'
-import { Dices, PlusCircle, Eye, Ban, Calendar, AlertCircle } from 'lucide-react'
+import { Activity, PlusCircle, Eye, Calendar } from 'lucide-react'
 
 interface GameListProps {
   onOpenAddGame: () => void
@@ -33,11 +33,11 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-            <Dices className="w-5 h-5 text-indigo-400" />
-            <span>Poker Games & Sessions</span>
+            <Activity className="w-5 h-5 text-indigo-400" />
+            <span>Activity Sessions</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Chronological games with gross rake, session expenses, owner attendance, and resulting waterfall payouts.
+            Chronological sessions with contribution fees, expenses, host attendance, and distributions.
           </p>
         </div>
 
@@ -81,26 +81,26 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
             className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors min-h-[38px] sm:min-h-0"
           >
             <PlusCircle className="w-4 h-4" />
-            <span>Record New Game</span>
+            <span>Record New Session</span>
           </button>
         </div>
       </div>
 
       {filteredGames.length === 0 ? (
         <div className="p-12 text-center bg-slate-900/50 border border-slate-800 rounded-xl">
-          <Dices className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <h3 className="text-base font-semibold text-slate-200">No games found</h3>
+          <Activity className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <h3 className="text-base font-semibold text-slate-200">No sessions found</h3>
           <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
             {filter === 'voided'
-              ? 'No voided games recorded. Active games can be voided with a required reason if entered in error.'
-              : 'Record new poker sessions to calculate session expenses, recovery progress, and owner distribution.'}
+              ? 'No voided sessions recorded. Active sessions can be voided with a reason if entered in error.'
+              : 'Record new sessions to track activity expenses, equipment recovery, and organizer distribution.'}
           </p>
           {filter !== 'voided' && (
             <button
               onClick={onOpenAddGame}
               className="mt-4 px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
             >
-              Record First Game
+              Record First Session
             </button>
           )}
         </div>
@@ -127,7 +127,7 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-sm text-slate-100">
-                          Game #{game.gameNumber}
+                          Session #{game.gameNumber}
                         </span>
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
@@ -168,7 +168,7 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mt-4 text-xs font-mono">
                   <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
                     <span className="text-[10px] uppercase font-sans text-slate-400 block mb-0.5">
-                      Gross Rake
+                      Gross Fee
                     </span>
                     <span className="font-bold text-slate-100 text-sm">
                       {formatINR(game.grossRakePaise)}
@@ -186,7 +186,7 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
 
                   <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
                     <span className="text-[10px] uppercase font-sans text-slate-400 block mb-0.5">
-                      Net Rake
+                      Net Fee
                     </span>
                     <span className="font-bold text-slate-100 text-sm">
                       {formatINR(calc?.netRakePaise || 0)}
@@ -195,7 +195,7 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
 
                   <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
                     <span className="text-[10px] uppercase font-sans text-slate-400 block mb-0.5">
-                      Table Recovery
+                      Equipment Reserve
                     </span>
                     <span className="font-bold text-amber-400 text-sm">
                       {formatINR(calc?.tableRecoveryAllocatedPaise || 0)}
@@ -204,7 +204,7 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
 
                   <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
                     <span className="text-[10px] uppercase font-sans text-slate-400 block mb-0.5">
-                      Festival Fund
+                      Event Fund
                     </span>
                     <span className="font-bold text-purple-400 text-sm">
                       {formatINR(calc?.festivalFundAllocatedPaise || 0)}
@@ -221,10 +221,10 @@ export const GameList: React.FC<GameListProps> = ({ onOpenAddGame }) => {
                   </div>
                 </div>
 
-                {/* Owner Attendance & Payouts Bar */}
+                {/* Host Attendance & Payouts Bar */}
                 <div className="mt-4 pt-3 border-t border-slate-800/60">
                   <div className="text-[11px] text-slate-400 font-medium mb-2">
-                    Owner Attendance & Calculated Game Entitlements:
+                    Host Attendance & Calculated Session Distribution:
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     {owners.map((o) => {

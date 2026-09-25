@@ -8,19 +8,22 @@ import { ExpenseList } from './components/expenses/ExpenseList'
 import { OwnerSettlementView } from './components/settlements/OwnerSettlementView'
 import { AuditLogView } from './components/audit/AuditLogView'
 import { SettingsView } from './components/settings/SettingsView'
-import { ReportsView } from './components/reports/ReportsView'
 import { AddGameModal } from './components/games/AddGameModal'
 import { QuickHistoricalRakeModal } from './components/players/QuickHistoricalRakeModal'
-import { AuthModal } from './components/auth/AuthModal'
-import { ShieldCheck, Database, LogIn } from 'lucide-react'
+import { LoginPage } from './components/auth/LoginPage'
+import { ShieldCheck, Database } from 'lucide-react'
 
 const LedgerAppContent: React.FC = () => {
-  const { isOnlineMode, isAuthenticated, userEmail } = useLedger()
+  const { isOnlineMode, isAuthenticated } = useLedger()
 
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard')
   const [isAddGameOpen, setIsAddGameOpen] = useState(false)
   const [isQuickRakeOpen, setIsQuickRakeOpen] = useState(false)
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+
+  // Gate application behind login screen
+  if (!isAuthenticated) {
+    return <LoginPage />
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -54,8 +57,6 @@ const LedgerAppContent: React.FC = () => {
 
         {activeTab === 'audit' && <AuditLogView />}
 
-        {activeTab === 'reports' && <ReportsView />}
-
         {activeTab === 'settings' && <SettingsView />}
       </main>
 
@@ -63,30 +64,20 @@ const LedgerAppContent: React.FC = () => {
       <footer className="border-t border-slate-900 bg-slate-950/80 py-6 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-300">Poker Rake Ledger</span>
+            <span className="font-semibold text-slate-300">Session Activity Ledger</span>
             <span>•</span>
-            <span>Deterministic Integer Paise Engine</span>
+            <span>Personal Club Accounting</span>
             <span>•</span>
             <span className="flex items-center gap-1 text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5" /> Reconciled
+              <ShieldCheck className="w-3.5 h-3.5" /> Reconciled & Balanced
             </span>
           </div>
 
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1 text-slate-400">
               <Database className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{isOnlineMode ? 'Supabase PostgreSQL RLS' : 'Local Deterministic Ledger'}</span>
+              <span>{isOnlineMode ? 'Cloud Storage' : 'Local Precision Ledger'}</span>
             </span>
-
-            {!isAuthenticated && (
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="inline-flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-medium"
-              >
-                <LogIn className="w-3 h-3" />
-                <span>Sign In</span>
-              </button>
-            )}
           </div>
         </div>
       </footer>
@@ -101,10 +92,6 @@ const LedgerAppContent: React.FC = () => {
           isOpen={isQuickRakeOpen}
           onClose={() => setIsQuickRakeOpen(false)}
         />
-      )}
-
-      {isAuthModalOpen && (
-        <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       )}
     </div>
   )

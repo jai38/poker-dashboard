@@ -600,7 +600,7 @@ describe('Pure Accounting Engine Specification Tests', () => {
         id: 'exp-1',
         type: 'monthly_expense' as const,
         amountPaise: 2000 * 100,
-        description: 'Poker cards and chips',
+        description: 'Equipment cards and chips',
         expenseDate: '2026-09-01T18:00:00Z',
         status: 'active' as const,
         paidByOwnerId: 'o3',

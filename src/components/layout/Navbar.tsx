@@ -1,13 +1,12 @@
 import React, { useState } from 'react'
 import {
   LayoutDashboard,
-  Dices,
+  Activity,
   Users,
   Receipt,
   Scale,
   History,
   Settings,
-  FileSpreadsheet,
   PlusCircle,
   Menu,
   X,
@@ -25,7 +24,6 @@ export type NavTab =
   | 'settlements'
   | 'audit'
   | 'settings'
-  | 'reports'
 
 interface NavbarProps {
   activeTab: NavTab
@@ -45,36 +43,29 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navItems: { id: NavTab; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { id: 'games', label: 'Games', icon: <Dices className="w-4 h-4" /> },
-    { id: 'players', label: 'Players', icon: <Users className="w-4 h-4" /> },
+    { id: 'games', label: 'Sessions', icon: <Activity className="w-4 h-4" /> },
+    { id: 'players', label: 'Members', icon: <Users className="w-4 h-4" /> },
     { id: 'expenses', label: 'Expenses', icon: <Receipt className="w-4 h-4" /> },
     { id: 'settlements', label: 'Settlements', icon: <Scale className="w-4 h-4" /> },
     { id: 'audit', label: 'Audit Log', icon: <History className="w-4 h-4" /> },
-    { id: 'reports', label: 'Reports', icon: <FileSpreadsheet className="w-4 h-4" /> },
     { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
   ]
 
   // Primary mobile bottom nav tabs
   const mobilePrimaryTabs: { id: NavTab; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { id: 'games', label: 'Games', icon: <Dices className="w-5 h-5" /> },
-    { id: 'players', label: 'Players', icon: <Users className="w-5 h-5" /> },
-    { id: 'settlements', label: 'Settle', icon: <Scale className="w-5 h-5" /> },
+    { id: 'games', label: 'Sessions', icon: <Activity className="w-5 h-5" /> },
+    { id: 'players', label: 'Members', icon: <Users className="w-5 h-5" /> },
+    { id: 'expenses', label: 'Expenses', icon: <Receipt className="w-5 h-5" /> },
   ]
 
   // Secondary items in the "More" drawer
   const moreMenuItems: { id: NavTab; label: string; description: string; icon: React.ReactNode }[] = [
     {
-      id: 'expenses',
-      label: 'Expenses & Adjustments',
-      description: 'Monthly costs, food, equipment, credit adjustments',
-      icon: <Receipt className="w-5 h-5 text-amber-400" />,
-    },
-    {
-      id: 'reports',
-      label: 'Reports & CSV Export',
-      description: 'Download reconciliation data, game sheets, and summaries',
-      icon: <FileSpreadsheet className="w-5 h-5 text-emerald-400" />,
+      id: 'settlements',
+      label: 'Settlements & Payouts',
+      description: 'Distribution shares, organizer entitlements, and peer settlement',
+      icon: <Scale className="w-5 h-5 text-emerald-400" />,
     },
     {
       id: 'audit',
@@ -85,7 +76,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     {
       id: 'settings',
       label: 'Settings & Cloud DB',
-      description: 'Supabase cloud sync, owner partner names, waterfall targets',
+      description: 'Supabase cloud sync, organizer names, allocation targets',
       icon: <Settings className="w-5 h-5 text-cyan-400" />,
     },
   ]
@@ -95,7 +86,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     setIsMobileMoreOpen(false)
   }
 
-  const isMoreTabActive = ['expenses', 'audit', 'reports', 'settings'].includes(activeTab)
+  const isMoreTabActive = ['settlements', 'audit', 'settings'].includes(activeTab)
 
   return (
     <>
@@ -105,13 +96,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
             {/* Brand Logo & Name */}
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-md shadow-indigo-500/20 text-white font-bold text-base sm:text-lg shrink-0">
-                ♠
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-md shadow-indigo-500/20 text-white font-bold shrink-0">
+                <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className="font-bold text-slate-100 text-sm sm:text-base tracking-tight truncate">
-                    Poker Ledger
+                    Session Ledger
                   </span>
                   <span
                     className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded-full border ${
@@ -129,7 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </span>
                 </div>
                 <p className="text-[10px] sm:text-[11px] text-slate-400 truncate hidden xs:block">
-                  4-Owner Table Accounting
+                  Shared Activity & Expense Ledger
                 </p>
               </div>
             </div>
@@ -139,24 +130,31 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={onOpenQuickRake}
                 className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 border border-slate-700 transition shadow-sm touch-manipulation"
-                title="Add Historical or Manual Player Rake"
+                title="Add Historical or Manual Fee Entry"
               >
                 <PlusCircle className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="hidden xs:inline">Quick</span> Rake
+                <span className="hidden xs:inline">Quick</span> Fee
               </button>
               <button
                 onClick={onOpenAddGame}
                 className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white shadow-sm shadow-indigo-600/30 transition touch-manipulation"
               >
                 <PlusCircle className="w-3.5 h-3.5" />
-                <span>+ Game</span>
+                <span>+ Session</span>
               </button>
 
-              {/* Desktop User display */}
+              {/* Desktop User display & signout */}
               {userEmail && (
                 <div className="hidden lg:flex items-center gap-2 pl-2 border-l border-slate-800 text-xs text-slate-400">
                   <User className="w-3.5 h-3.5 text-slate-500" />
                   <span className="max-w-[120px] truncate">{userEmail}</span>
+                  <button
+                    onClick={() => signOut()}
+                    className="p-1 hover:bg-rose-500/10 hover:text-rose-400 rounded transition text-slate-400"
+                    title="Sign Out"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               )}
             </div>
@@ -303,7 +301,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     await signOut()
                     setIsMobileMoreOpen(false)
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-red-500/20 hover:text-red-300 text-xs font-semibold text-slate-300 rounded-lg transition"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-rose-500/20 hover:text-rose-300 text-xs font-semibold text-slate-300 rounded-lg transition"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   Sign Out

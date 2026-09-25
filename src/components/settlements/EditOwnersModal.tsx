@@ -31,7 +31,7 @@ export const EditOwnersModal: React.FC<EditOwnersModalProps> = ({ isOpen, onClos
     for (const o of owners) {
       const val = (names[o.id] || '').trim()
       if (!val) {
-        setError(`Owner #${o.id.replace('owner-', '')} name cannot be empty.`)
+        setError(`Organizer #${o.id.replace('owner-', '')} name cannot be empty.`)
         return
       }
     }
@@ -45,7 +45,7 @@ export const EditOwnersModal: React.FC<EditOwnersModalProps> = ({ isOpen, onClos
       await updateOwners(payload)
       onClose()
     } catch (err: any) {
-      setError(err.message || 'Failed to update owner names')
+      setError(err.message || 'Failed to update organizer names')
     } finally {
       setIsSubmitting(false)
     }
@@ -55,8 +55,8 @@ export const EditOwnersModal: React.FC<EditOwnersModalProps> = ({ isOpen, onClos
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Edit Table Partner Names"
-      subtitle="Configure the 4 table partners"
+      title="Edit Organizer Names"
+      subtitle="Configure the 4 organizers"
       maxWidth="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -70,7 +70,7 @@ export const EditOwnersModal: React.FC<EditOwnersModalProps> = ({ isOpen, onClos
           {owners.map((owner, idx) => (
             <div key={owner.id} className="space-y-1">
               <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
-                <span>Partner #{idx + 1}</span>
+                <span>Organizer #{idx + 1}</span>
                 <span className="text-[10px] text-slate-500 font-mono">ID: {owner.id}</span>
               </label>
               <div className="relative">
@@ -83,7 +83,7 @@ export const EditOwnersModal: React.FC<EditOwnersModalProps> = ({ isOpen, onClos
                   onChange={(e) =>
                     setNames((prev) => ({ ...prev, [owner.id]: e.target.value }))
                   }
-                  placeholder={`e.g. Partner ${idx + 1}`}
+                  placeholder={`e.g. Organizer ${idx + 1}`}
                   className="w-full pl-9 pr-3 py-2 text-base sm:text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
                   required
                 />
@@ -106,7 +106,7 @@ export const EditOwnersModal: React.FC<EditOwnersModalProps> = ({ isOpen, onClos
             className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white shadow-sm transition-colors min-h-[40px]"
           >
             <Save className="w-3.5 h-3.5" />
-            <span>{isSubmitting ? 'Saving...' : 'Save Owner Names'}</span>
+            <span>{isSubmitting ? 'Saving...' : 'Save Organizer Names'}</span>
           </button>
         </div>
       </form>

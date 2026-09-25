@@ -9,7 +9,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Users,
-  Dices,
+  Activity,
   ArrowRightLeft,
 } from 'lucide-react'
 import { useLedger } from '../../lib/store/ledgerStore'
@@ -65,15 +65,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-slate-100">
                 {summary.reconciled
-                  ? 'Ledger Reconciled to the Exact Paise'
+                  ? 'Ledger Balanced to the Exact Paise'
                   : 'Ledger Discrepancy Detected'}
               </h2>
               <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                Pure Integer Paise
+                Pure Integer Precision
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Distributable rake matches sum of owner entitlements exactly (Diff: {formatINR(summary.reconciliationDiffPaise)}).
+              Distributable balance matches sum of organizer entitlements exactly (Diff: {formatINR(summary.reconciliationDiffPaise)}).
             </p>
           </div>
         </div>
@@ -90,42 +90,42 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             onClick={onOpenQuickRake}
             className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
           >
-            + Quick Rake
+            + Quick Fee
           </button>
           <button
             onClick={onOpenAddGame}
             className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
           >
-            + Add Game
+            + New Session
           </button>
         </div>
       </div>
 
-      {/* Primary Financial Metric Cards (Section 19) */}
+      {/* Primary Financial Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Total Rake Generated */}
+        {/* Total Fees Generated */}
         <StatCard
-          title="Total Rake Generated"
+          title="Total Fees Generated"
           amount={formatINR(summary.totalRakeGeneratedPaise)}
-          subtitle="Money owed by players from all games and historical rake"
+          subtitle="Total member session dues and recorded contributions"
           badge={{ text: 'Generated', variant: 'indigo' }}
           icon={<TrendingUp className="w-5 h-5" />}
         />
 
-        {/* Total Rake Collected */}
+        {/* Total Fees Collected */}
         <StatCard
-          title="Total Rake Collected"
+          title="Total Fees Collected"
           amount={formatINR(summary.totalRakeCollectedPaise)}
-          subtitle="Actual cash collected from players to date"
+          subtitle="Actual payments received from members to date"
           badge={{ text: 'Collected', variant: 'emerald' }}
           icon={<Wallet className="w-5 h-5" />}
         />
 
-        {/* Outstanding Rake */}
+        {/* Outstanding Dues */}
         <StatCard
-          title="Outstanding Rake"
+          title="Outstanding Dues"
           amount={formatINR(summary.totalOutstandingPaise)}
-          subtitle="Uncollected rake across all active players"
+          subtitle="Pending contributions across all active members"
           badge={{
             text: summary.totalOutstandingPaise > 0 ? 'Pending Collection' : 'Zero Due',
             variant: summary.totalOutstandingPaise > 0 ? 'amber' : 'emerald',
@@ -133,9 +133,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           icon={<Clock className="w-5 h-5" />}
         />
 
-        {/* Table Recovery */}
+        {/* Equipment Reserve */}
         <StatCard
-          title="Table Recovery"
+          title="Equipment Reserve"
           amount={`${formatINR(summary.tableRecoveryAccumulatedPaise)} / ${formatINR(
             summary.tableRecoveryTargetPaise
           )}`}
@@ -147,14 +147,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           progress={{
             current: summary.tableRecoveryAccumulatedPaise,
             target: summary.tableRecoveryTargetPaise,
-            label: 'Table Cost Recovered',
+            label: 'Equipment Cost Recovered',
           }}
           icon={<ShieldCheck className="w-5 h-5" />}
         />
 
-        {/* Festival Fund */}
+        {/* Event Fund */}
         <StatCard
-          title="Festival Fund"
+          title="Event Fund"
           amount={`${formatINR(summary.festivalFundAccumulatedPaise)} / ${formatINR(
             summary.festivalFundTargetPaise
           )}`}
@@ -166,25 +166,25 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           progress={{
             current: summary.festivalFundAccumulatedPaise,
             target: summary.festivalFundTargetPaise,
-            label: 'Festival Target Reserve',
+            label: 'Event Target Reserve',
           }}
           icon={<Sparkles className="w-5 h-5" />}
         />
 
-        {/* Distributable Rake */}
+        {/* Distributable Balance */}
         <StatCard
-          title="Distributable Rake"
+          title="Distributable Balance"
           amount={formatINR(summary.totalDistributableRakePaise)}
-          subtitle="Net rake after table recovery & festival targets are satisfied"
+          subtitle="Net balance available after reserve & event targets are met"
           badge={{
-            text: summary.totalDistributableRakePaise > 0 ? 'Available for Owners' : 'No Profit Yet',
+            text: summary.totalDistributableRakePaise > 0 ? 'Available for Distribution' : 'Reserve Funding First',
             variant: summary.totalDistributableRakePaise > 0 ? 'emerald' : 'slate',
           }}
           icon={<TrendingUp className="w-5 h-5" />}
         />
       </div>
 
-      {/* Visual Money Waterfall (Section 9) */}
+      {/* Visual Money Waterfall */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
           <div>
@@ -192,7 +192,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <span>Financial Waterfall & Pipeline</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Chronological flow from gross game rake through session expenses, recovery targets, and owner shares
+              Chronological flow from gross session fees through session expenses, recovery targets, and organizer shares
             </p>
           </div>
           <span className="text-xs font-mono text-slate-400 bg-slate-950 px-2.5 py-1 rounded-md border border-slate-800">
@@ -201,20 +201,20 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          {/* Step 1: Gross Rake */}
+          {/* Step 1: Gross Fees */}
           <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3.5 flex flex-col justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              1. Gross Rake
+              1. Gross Fees
             </span>
             <div className="my-2">
               <div className="text-lg font-bold text-slate-100">
                 {formatINR(summary.totalRakeGeneratedPaise)}
               </div>
               <div className="text-[11px] text-slate-500">
-                {games.filter((g) => g.status === 'active').length} games + {historicalRake.filter((h) => h.status === 'active').length} historical
+                {games.filter((g) => g.status === 'active').length} sessions + {historicalRake.filter((h) => h.status === 'active').length} entries
               </div>
             </div>
-            <div className="text-[10px] text-indigo-400">Total generated</div>
+            <div className="text-[10px] text-indigo-400">Total recorded</div>
           </div>
 
           {/* Step 2: Session Expenses */}
@@ -226,15 +226,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <div className="text-lg font-bold text-rose-400">
                 - {formatINR(summary.totalSessionExpensesPaise)}
               </div>
-              <div className="text-[11px] text-slate-500">Deducted first at game level</div>
+              <div className="text-[11px] text-slate-500">Deducted at session level</div>
             </div>
             <div className="text-[10px] text-rose-400/80">Expenses cannot make net &lt; 0</div>
           </div>
 
-          {/* Step 3: Table Recovery */}
+          {/* Step 3: Equipment Reserve */}
           <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3.5 flex flex-col justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              3. Table Recovery
+              3. Equipment Reserve
             </span>
             <div className="my-2">
               <div className="text-lg font-bold text-amber-400">
@@ -249,10 +249,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
           </div>
 
-          {/* Step 4: Festival Fund */}
+          {/* Step 4: Event Fund */}
           <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3.5 flex flex-col justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              4. Festival Fund
+              4. Event Fund
             </span>
             <div className="my-2">
               <div className="text-lg font-bold text-purple-400">
@@ -276,26 +276,26 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <div className="text-lg font-bold text-emerald-400">
                 {formatINR(summary.totalDistributableRakePaise)}
               </div>
-              <div className="text-[11px] text-slate-500">4 Owners Attendance Rules</div>
+              <div className="text-[11px] text-slate-500">4 Organizers Attendance</div>
             </div>
             <div className="text-[10px] text-emerald-400/80">₹1,000 equal + 10% absent</div>
           </div>
         </div>
       </div>
 
-      {/* Two Column Layout: Owner Entitlements & Recent Activity */}
+      {/* Two Column Layout: Organizer Entitlements & Recent Sessions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Owner Entitlement Table */}
+        {/* Organizer Entitlement Table */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
                   <Users className="w-4 h-4 text-indigo-400" />
-                  <span>Owner Entitlements</span>
+                  <span>Organizer Entitlements</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Calculated from distributable games using the ₹1,000 rule and attendance percentages
+                  Calculated from distributable sessions using attendance distribution
                 </p>
               </div>
               <button
@@ -312,7 +312,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-800 text-slate-400 text-xs font-medium">
-                    <th className="py-2.5">Owner</th>
+                    <th className="py-2.5">Organizer</th>
                     <th className="py-2.5 text-right">Equal Share</th>
                     <th className="py-2.5 text-right">Excess Share</th>
                     <th className="py-2.5 text-right">Total Entitlement</th>
@@ -364,7 +364,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               </table>
             </div>
 
-            {/* Mobile Cards View (Zero Horizontal Scroll Needed) */}
+            {/* Mobile Cards View */}
             <div className="sm:hidden space-y-2.5">
               {owners.map((owner) => {
                 const ent = summary.ownerEntitlements[owner.id]
@@ -405,44 +405,44 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <div className="mt-4 p-3 bg-slate-950/60 border border-slate-800/80 rounded-lg text-xs text-slate-400 flex items-center gap-2">
               <span className="text-amber-400 font-bold">ℹ</span>
               <span>
-                Owner profit distribution activates once Table Recovery ({formatINR(summary.tableRecoveryTargetPaise)}) and Festival Fund ({formatINR(summary.festivalFundTargetPaise)}) targets are fulfilled.
+                Distribution activates once Equipment Reserve ({formatINR(summary.tableRecoveryTargetPaise)}) and Event Fund ({formatINR(summary.festivalFundTargetPaise)}) targets are fulfilled.
               </span>
             </div>
           )}
         </div>
 
-        {/* Recent Games & Quick Overview */}
+        {/* Recent Sessions */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
-                  <Dices className="w-4 h-4 text-indigo-400" />
-                  <span>Recent Games</span>
+                  <Activity className="w-4 h-4 text-indigo-400" />
+                  <span>Recent Sessions</span>
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">Chronologically recorded poker sessions</p>
+                <p className="text-xs text-slate-400 mt-0.5">Chronologically recorded club sessions</p>
               </div>
               <button
                 onClick={onNavigateToGames}
                 className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1"
               >
-                <span>View All Games</span>
+                <span>View All Sessions</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
             {summary.gameResults.length === 0 ? (
               <div className="p-8 text-center border border-dashed border-slate-800 rounded-lg">
-                <Dices className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                <p className="text-sm text-slate-300 font-medium">No games recorded yet</p>
+                <Activity className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                <p className="text-sm text-slate-300 font-medium">No sessions recorded yet</p>
                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Historical rake entries (₹52,650) are tracked in the recovery pipeline. New sessions with attendance can be entered above.
+                  Previous fee entries ({formatINR(52650 * 100)}) are tracked in the recovery pipeline. New sessions with attendance can be entered above.
                 </p>
                 <button
                   onClick={onOpenAddGame}
                   className="mt-4 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white"
                 >
-                  Record First Game
+                  Record First Session
                 </button>
               </div>
             ) : (
@@ -455,7 +455,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-200">
-                          Game #{g.gameNumber}
+                          Session #{g.gameNumber}
                         </span>
                         <span className="text-[11px] text-slate-500 font-mono">
                           {formatDate(g.playedAt)}
@@ -484,12 +484,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-            <span>Historical Rake Entries: {historicalRake.length}</span>
+            <span>Previous Fee Entries: {historicalRake.length}</span>
             <button
               onClick={onNavigateToPlayers}
               className="text-indigo-400 hover:text-indigo-300 font-semibold"
             >
-              View Players →
+              View Members →
             </button>
           </div>
         </div>

@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 
 // Schema SQL snippet for quick copy
-const SQL_SCHEMA = `-- Poker Rake Ledger: Clean PostgreSQL Schema for Supabase
+const SQL_SCHEMA = `-- Activity Session Ledger: Clean PostgreSQL Schema for Supabase
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS owners (
@@ -223,7 +223,7 @@ export const DatabaseConfigCard: React.FC = () => {
   }
 
   const handleSyncToCloud = async () => {
-    if (!confirm('This will upload your current local players, games, payments, and settings to your Supabase database. Proceed?')) {
+    if (!confirm('This will upload your current local members, sessions, payments, and settings to your Supabase database. Proceed?')) {
       return
     }
     setIsSyncing(true)
@@ -270,7 +270,7 @@ export const DatabaseConfigCard: React.FC = () => {
               )}
             </h2>
             <p className="text-sm text-slate-400 mt-0.5">
-              Connect a free PostgreSQL database from Supabase so all 4 partners can access and update the ledger from any device.
+              Connect a free PostgreSQL database from Supabase so all 4 organizers can access and update the ledger from any device.
             </p>
           </div>
         </div>

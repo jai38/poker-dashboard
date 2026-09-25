@@ -82,8 +82,8 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
             onChange={(e: any) => setType(e.target.value)}
             className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
           >
-            <option value="monthly_expense">Monthly / General Expense (e.g. Electricity, Table supplies)</option>
-            <option value="credit_adjustment">Credit / Adjustment (e.g. Deposit refund, Owner reimbursement)</option>
+            <option value="monthly_expense">Monthly / General Expense (e.g. Utilities, Equipment supplies)</option>
+            <option value="credit_adjustment">Credit / Adjustment (e.g. Deposit refund, Organizer reimbursement)</option>
             <option value="session_expense">Session Expense</option>
           </select>
         </div>
@@ -95,7 +95,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
           </label>
           <input
             type="text"
-            placeholder="e.g. September electricity adjustment"
+            placeholder="e.g. September utility adjustment"
             value={description}
             onChange={(e) => {
               setDescription(e.target.value)
@@ -130,18 +130,18 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
           </div>
         </div>
 
-        {/* Paid By Partner (Custody & Reimbursement) */}
+        {/* Paid By Organizer (Custody & Reimbursement) */}
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
             <span>Paid By</span>
-            <span className="text-[10px] text-indigo-400 font-normal">Out of pocket or table pool</span>
+            <span className="text-[10px] text-indigo-400 font-normal">Out of pocket or activity pool</span>
           </label>
           <select
             value={paidByOwnerId}
             onChange={(e) => setPaidByOwnerId(e.target.value)}
             className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
           >
-            <option value="">Shared Table Cash Pool</option>
+            <option value="">Shared Activity Cash Pool</option>
             {owners.map((o) => (
               <option key={o.id} value={o.id}>
                 Paid by {o.name} (Reimbursable Out of Pocket)
@@ -149,7 +149,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
             ))}
           </select>
           <p className="text-[11px] text-slate-400">
-            If a partner paid from their own pocket, the settlement engine will reimburse them during partner payouts.
+            If an organizer paid from their own pocket, the settlement engine will reimburse them during organizer payouts.
           </p>
         </div>
 
@@ -164,18 +164,18 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
           />
         </div>
 
-        {/* Associated Game (Optional) */}
+        {/* Associated Session (Optional) */}
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-slate-300">Associated Game (Optional)</label>
+          <label className="text-xs font-medium text-slate-300">Associated Session (Optional)</label>
           <select
             value={gameId}
             onChange={(e) => setGameId(e.target.value)}
             className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
           >
-            <option value="">No game association (General / Monthly)</option>
+            <option value="">No session association (General / Monthly)</option>
             {games.map((g) => (
               <option key={g.id} value={g.id}>
-                Game #{g.gameNumber} ({new Date(g.playedAt).toLocaleDateString()})
+                Session #{g.gameNumber} ({new Date(g.playedAt).toLocaleDateString()})
               </option>
             ))}
           </select>

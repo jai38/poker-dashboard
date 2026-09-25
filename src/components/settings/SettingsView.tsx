@@ -50,10 +50,10 @@ export const SettingsView: React.FC = () => {
         name: (ownerNames[o.id] || '').trim(),
       }))
       await updateOwners(payload)
-      setOwnersSuccessMsg('Owner names saved successfully! All tables, dropdowns, and settlements updated.')
+      setOwnersSuccessMsg('Organizer names saved successfully! All tables, dropdowns, and settlements updated.')
       setTimeout(() => setOwnersSuccessMsg(null), 4000)
     } catch (err: any) {
-      alert(err.message || 'Failed to update owner names')
+      alert(err.message || 'Failed to update organizer names')
     } finally {
       setIsSavingOwners(false)
     }
@@ -91,7 +91,7 @@ export const SettingsView: React.FC = () => {
 
   const handleClearConfirm = () => {
     clearDatabase()
-    setSettingsSuccessMsg('Database completely cleared to ₹0. All players, games, payments, and expenses reset.')
+    setSettingsSuccessMsg('Database completely cleared to ₹0. All members, sessions, payments, and expenses reset.')
     setTimeout(() => setSettingsSuccessMsg(null), 4000)
   }
 
@@ -104,23 +104,23 @@ export const SettingsView: React.FC = () => {
           <span>Accounting & Ledger Configuration</span>
         </h2>
         <p className="text-xs text-slate-400 mt-1">
-          Configure cloud database synchronization, table partner names, financial waterfall targets, and database state.
+          Configure cloud database synchronization, organizer names, financial waterfall targets, and database state.
         </p>
       </div>
 
       {/* Cloud Database (Supabase) Configuration */}
       <DatabaseConfigCard />
 
-      {/* 1. Owner Names Configuration (Direct save, no reason required) */}
+      {/* 1. Organizer Names Configuration (Direct save, no reason required) */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-slate-100 uppercase tracking-wider flex items-center gap-2">
               <Users className="w-4 h-4 text-indigo-400" />
-              <span>Owner Names (4 Partners)</span>
+              <span>Organizer Names (4 Organizers)</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Enter the real names of the 4 table partners. These names appear across games, attendance, and settlements.
+              Enter the real names of the 4 organizers. These names appear across sessions, attendance, and settlements.
             </p>
           </div>
           <span className="text-xs text-indigo-400 font-mono bg-indigo-950/60 border border-indigo-800/40 px-2 py-0.5 rounded">
@@ -140,7 +140,7 @@ export const SettingsView: React.FC = () => {
             {owners.map((owner, idx) => (
               <div key={owner.id} className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
-                  <span>Owner #{idx + 1} Name</span>
+                  <span>Organizer #{idx + 1} Name</span>
                   <span className="text-[10px] text-slate-500 font-mono">ID: {owner.id}</span>
                 </label>
                 <div className="relative">
@@ -153,7 +153,7 @@ export const SettingsView: React.FC = () => {
                     onChange={(e) =>
                       setOwnerNames((prev) => ({ ...prev, [owner.id]: e.target.value }))
                     }
-                    placeholder={`e.g. Partner ${idx + 1}`}
+                    placeholder={`e.g. Organizer ${idx + 1}`}
                     className="w-full pl-9 pr-3 py-2 text-base sm:text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
                     required
                   />
@@ -169,7 +169,7 @@ export const SettingsView: React.FC = () => {
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white shadow-sm transition-colors min-h-[40px]"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>{isSavingOwners ? 'Saving...' : 'Save Owner Names'}</span>
+              <span>{isSavingOwners ? 'Saving...' : 'Save Organizer Names'}</span>
             </button>
           </div>
         </form>
@@ -184,13 +184,13 @@ export const SettingsView: React.FC = () => {
           </div>
         )}
 
-        {/* Warning Notice (Section 26) */}
+        {/* Warning Notice */}
         <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 shrink-0 text-amber-400 mt-0.5" />
           <div className="space-y-1">
             <div className="font-semibold text-amber-200">Accounting Settings Caution</div>
             <p className="leading-relaxed">
-              Changing financial targets (Table Recovery Target or Festival Reserve Target) alters downstream waterfall calculations for all games. Confirmation and an audit reason are required.
+              Changing financial targets (Equipment Reserve Target or Event Reserve Target) alters downstream waterfall calculations for all sessions. Confirmation and an audit reason are required.
             </p>
           </div>
         </div>
@@ -204,7 +204,7 @@ export const SettingsView: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-300">
-                  Table Recovery Target (₹)
+                  Equipment Reserve Target (₹)
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-2 text-sm text-slate-500">₹</span>
@@ -224,7 +224,7 @@ export const SettingsView: React.FC = () => {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-300">
-                  Festival Fund Target (₹)
+                  Event Fund Target (₹)
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-2 text-sm text-slate-500">₹</span>
@@ -259,12 +259,12 @@ export const SettingsView: React.FC = () => {
                     required
                   />
                 </div>
-                <p className="text-[11px] text-slate-500">Initial spec: ₹1,000 per game split equally</p>
+                <p className="text-[11px] text-slate-500">Initial spec: ₹1,000 per session split equally</p>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-slate-300">
-                  Absent Owner Percentage (%)
+                  Absent Organizer Percentage (%)
                 </label>
                 <div className="relative">
                   <input
@@ -280,7 +280,7 @@ export const SettingsView: React.FC = () => {
                   />
                   <span className="absolute right-3 top-2 text-sm text-slate-500">%</span>
                 </div>
-                <p className="text-[11px] text-slate-500">Initial spec: 10% each on excess rake</p>
+                <p className="text-[11px] text-slate-500">Initial spec: 10% each on excess pool</p>
               </div>
             </div>
           </div>
@@ -311,7 +311,7 @@ export const SettingsView: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Wipes all data clean to ₹0. Deletes all players, historical rake entries, games, payments, expenses, and settlements. Preserves your 4 configured partner names so you can start entering your real ledger completely fresh.
+            Wipes all data clean to ₹0. Deletes all members, fee entries, sessions, payments, expenses, and settlements. Preserves your 4 configured organizer names so you can start entering your real ledger completely fresh.
           </p>
           <button
             type="button"
@@ -330,7 +330,7 @@ export const SettingsView: React.FC = () => {
             <span>Reset Ledger to Initial ₹52,650 Seed State</span>
           </h3>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Loads the initial benchmark state from the specification: 16 players with ₹52,650 historical rake and ₹12,350 table recovery remaining.
+            Loads the initial benchmark state from the specification: 16 members with ₹52,650 fee history and ₹12,350 equipment reserve remaining.
           </p>
           <button
             type="button"
@@ -348,10 +348,10 @@ export const SettingsView: React.FC = () => {
         onClose={() => setIsConfirmOpen(false)}
         onConfirm={handleConfirmSettings}
         title="Confirm Accounting Targets Update"
-        message="Are you sure you want to update the financial targets? This will recalculate table recovery and festival thresholds across the ledger."
+        message="Are you sure you want to update the financial targets? This will recalculate equipment reserve and event fund thresholds across the ledger."
         confirmText="Update Targets"
         requireReason
-        reasonPlaceholder="e.g. Approved by all 4 table owners"
+        reasonPlaceholder="e.g. Approved by all 4 organizers"
       />
 
       <ConfirmDialog
@@ -359,7 +359,7 @@ export const SettingsView: React.FC = () => {
         onClose={() => setIsClearConfirmOpen(false)}
         onConfirm={handleClearConfirm}
         title="Clear Entire Database to Zero?"
-        message="This will permanently wipe all players, historical rake entries, games, payments, expenses, and settlements. Your 4 owner names will be kept. Are you sure you want to start completely from scratch?"
+        message="This will permanently wipe all members, fee entries, sessions, payments, expenses, and settlements. Your 4 organizer names will be kept. Are you sure you want to start completely from scratch?"
         confirmText="Yes, Wipe Database to Zero"
         isDestructive
       />
@@ -369,7 +369,7 @@ export const SettingsView: React.FC = () => {
         onClose={() => setIsResetConfirmOpen(false)}
         onConfirm={handleResetConfirm}
         title="Reset Ledger to Initial ₹52,650 Seed?"
-        message="Are you sure you want to reload the ₹52,650 historical rake seed with 16 players? Any current entries will be replaced."
+        message="Are you sure you want to reload the ₹52,650 fee seed with 16 members? Any current entries will be replaced."
         confirmText="Reload Seed"
         isDestructive
       />

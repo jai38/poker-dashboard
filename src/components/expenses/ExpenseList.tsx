@@ -50,7 +50,7 @@ export const ExpenseList: React.FC = () => {
             <span>Expenses & General Adjustments</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            General table maintenance, monthly electricity bills, adjustments, and refunds (separate from per-game session deductions).
+            General equipment maintenance, monthly bills, adjustments, and refunds (separate from per-session deductions).
           </p>
         </div>
 
@@ -96,14 +96,14 @@ export const ExpenseList: React.FC = () => {
         </div>
       </div>
 
-      {/* Expenses Table (Section 23) */}
+      {/* Expenses Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
         {sortedExpenses.length === 0 ? (
           <div className="p-12 text-center">
             <Receipt className="w-10 h-10 text-slate-600 mx-auto mb-3" />
             <h3 className="text-sm font-semibold text-slate-200">No general expenses recorded</h3>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              Per-game session expenses are entered directly in games. Record month-end electricity bills or table supplies here.
+              Per-session expenses are entered directly in sessions. Record month-end utility bills or supplies here.
             </p>
             <button
               onClick={() => setIsAddModalOpen(true)}
@@ -168,7 +168,7 @@ export const ExpenseList: React.FC = () => {
                       <span className="text-slate-400">
                         {associatedGame ? (
                           <span className="font-mono text-indigo-400">
-                            Game #{associatedGame.gameNumber}
+                            Session #{associatedGame.gameNumber}
                           </span>
                         ) : (
                           <span className="text-slate-500 italic text-[11px]">Monthly General</span>
@@ -198,7 +198,7 @@ export const ExpenseList: React.FC = () => {
                     <th className="py-3 px-4">Date</th>
                     <th className="py-3 px-4">Type</th>
                     <th className="py-3 px-4">Description</th>
-                    <th className="py-3 px-4">Associated Game</th>
+                    <th className="py-3 px-4">Associated Session</th>
                     <th className="py-3 px-4 text-right">Amount</th>
                     <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4 text-center">Action</th>
@@ -231,10 +231,10 @@ export const ExpenseList: React.FC = () => {
                         <td className="py-3 px-4 text-slate-400">
                           {associatedGame ? (
                             <span className="font-mono text-indigo-400">
-                              Game #{associatedGame.gameNumber}
+                              Session #{associatedGame.gameNumber}
                             </span>
                           ) : (
-                            <span className="text-slate-500 italic">No game (Monthly)</span>
+                            <span className="text-slate-500 italic">General (Monthly)</span>
                           )}
                         </td>
                         <td className="py-3 px-4 text-right font-mono font-bold">
@@ -297,7 +297,7 @@ export const ExpenseList: React.FC = () => {
         confirmText="Void Expense"
         isDestructive
         requireReason
-        reasonPlaceholder="e.g. Invoiced to wrong table or refund entered"
+        reasonPlaceholder="e.g. Duplicate entry or refund entered"
       />
     </div>
   )

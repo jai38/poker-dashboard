@@ -36,7 +36,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Poker Ledger Sign In" maxWidth="sm">
+    <Modal isOpen={isOpen} onClose={onClose} title="Session Ledger Sign In" maxWidth="sm">
       <form onSubmit={handleLogin} className="space-y-4">
         {error && (
           <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs font-medium text-rose-400">
@@ -50,17 +50,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           <span>
             {isOnlineMode
               ? 'Secured with Supabase Authentication & PostgreSQL Row Level Security (RLS).'
-              : 'Local Deterministic Mode: Enter any email to continue or connect Supabase.'}
+              : 'Local Deterministic Mode: Enter credentials to continue.'}
           </span>
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-slate-300">Email Address</label>
+          <label className="text-xs font-medium text-slate-300">Email Address or Username</label>
           <div className="relative">
             <Mail className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
             <input
-              type="email"
-              placeholder="owner@pokerledger.local"
+              type="text"
+              placeholder="admin"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"

@@ -25,6 +25,7 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
   const tableBalance = summary.tableRecoveryAccumulatedPaise
   const festivalBalance = summary.festivalFundAccumulatedPaise
   const availableInSource = fromBucket === 'table_recovery' ? tableBalance : festivalBalance
+  const parsedAmount = parseRupeesToPaise(amountRupees || '0')
 
   const handleFromChange = (newFrom: 'table_recovery' | 'festival_fund') => {
     setFromBucket(newFrom)
@@ -39,14 +40,13 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
     e.preventDefault()
     setError(null)
 
-    const parsedAmount = parseRupeesToPaise(amountRupees)
     if (parsedAmount <= 0) {
       setError('Amount must be greater than ₹0.')
       return
     }
 
     if (parsedAmount > availableInSource) {
-      setError(`Cannot transfer more than available balance in ${fromBucket === 'table_recovery' ? 'Table Recovery' : 'Festival Fund'} (${formatINR(availableInSource)}).`)
+      setError(`Cannot transfer more than available balance in ${fromBucket === 'table_recovery' ? 'Equipment Reserve' : 'Event Fund'} (${formatINR(availableInSource)}).`)
       return
     }
 
@@ -91,7 +91,7 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
           <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl text-xs font-mono">
             <div>
               <span className="text-[10px] font-sans text-slate-400 uppercase tracking-wider block">
-                Table Recovery Balance
+                Equipment Reserve Balance
               </span>
               <span className="text-sm font-bold text-indigo-300">
                 {formatINR(tableBalance)}
@@ -99,7 +99,7 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
             </div>
             <div>
               <span className="text-[10px] font-sans text-slate-400 uppercase tracking-wider block">
-                Festival Fund Balance
+                Event Fund Balance
               </span>
               <span className="text-sm font-bold text-amber-300">
                 {formatINR(festivalBalance)}
@@ -116,33 +116,57 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
                 onChange={(e) => handleFromChange(e.target.value as any)}
                 className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
               >
-                <option value="table_recovery">Table Recovery ({formatINR(tableBalance)})</option>
-                <option value="festival_fund">Festival Fund ({formatINR(festivalBalance)})</option>
+                <option value="table_recovery">Equipment Reserve / Table Share ({formatINR(tableBalance)})</option>
+                <option value="festival_fund">Event Fund / Festival ({formatINR(festivalBalance)})</option>
               </select>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-300">Transfer To</label>
+              <label className="text-xs font-medium text-slate-300">Transfer / Allocate To</label>
               <select
                 value={toBucket}
                 onChange={(e) => setToBucket(e.target.value as any)}
                 className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
               >
-                <option value="owner_profit">Owner Distributable Profit</option>
+                <option value="owner_profit">Divide of All — Share Equally Among All 4 Organizers</option>
                 {fromBucket !== 'festival_fund' && (
-                  <option value="festival_fund">Festival Fund</option>
+                  <option value="festival_fund">Event Fund (Festival Reserve)</option>
                 )}
                 {fromBucket !== 'table_recovery' && (
-                  <option value="table_recovery">Table Recovery</option>
+                  <option value="table_recovery">Equipment Reserve (Table Share)</option>
                 )}
               </select>
             </div>
           </div>
 
-          {toBucket === 'owner_profit' && (
-            <p className="text-[11px] text-emerald-400/90 bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-lg">
-              Funds allocated to <strong>Owner Distributable Profit</strong> are divided equally among all 4 table partners and immediately reflected on their balance sheets.
-            </p>
+          {toBucket === 'owner_profit' ? (
+            <div className="text-[11px] text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-lg space-y-1">
+              <p className="font-semibold text-emerald-200">
+                ✨ Divide of All (Share Among Us):
+              </p>
+              <p className="text-emerald-300/90">
+                Allocating {formatINR(parsedAmount || 0)} will distribute {formatINR(Math.floor((parsedAmount || 0) / 4))} equally to each of the 4 organizers.
+                Any organizer holding physical cash will automatically receive peer-to-peer transfer instructions to pay the other organizers their equal share.
+              </p>
+            </div>
+          ) : toBucket === 'festival_fund' ? (
+            <div className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-500/30 p-3 rounded-lg">
+              <p className="font-semibold text-amber-200">
+                🎉 Event Fund (Festival Reserve):
+              </p>
+              <p className="text-amber-300/90">
+                Funds will be reserved for upcoming festivals, celebrations, and team events.
+              </p>
+            </div>
+          ) : (
+            <div className="text-[11px] text-indigo-300 bg-indigo-950/40 border border-indigo-500/30 p-3 rounded-lg">
+              <p className="font-semibold text-indigo-200">
+                🛠️ Equipment Reserve (Table Share):
+              </p>
+              <p className="text-indigo-300/90">
+                Funds will be allocated towards equipment upkeep, table recovery, and infrastructure.
+              </p>
+            </div>
           )}
 
           {/* Amount */}
@@ -152,7 +176,7 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
               <button
                 type="button"
                 onClick={() => setAmountRupees((availableInSource / 100).toString())}
-                className="text-[10px] font-mono text-indigo-400 hover:text-indigo-300"
+                className="text-[10px] font-mono text-indigo-400 hover:text-indigo-300 font-semibold"
               >
                 Max: {formatINR(availableInSource)}
               </button>
@@ -170,6 +194,32 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
                 required
               />
             </div>
+
+            {/* Quick Preset Buttons */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[10px] text-slate-500 font-medium">Quick Amount:</span>
+              {[1000, 2000, 5000].map((preset) => {
+                const presetPaise = preset * 100
+                if (presetPaise > availableInSource) return null
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setAmountRupees(preset.toString())}
+                    className="px-2 py-0.5 text-[10px] font-mono rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 transition-colors"
+                  >
+                    ₹{preset.toLocaleString('en-IN')}
+                  </button>
+                )
+              })}
+              <button
+                type="button"
+                onClick={() => setAmountRupees((availableInSource / 100).toString())}
+                className="px-2 py-0.5 text-[10px] font-mono rounded bg-indigo-950/70 hover:bg-indigo-900/70 border border-indigo-500/40 text-indigo-300 transition-colors"
+              >
+                Max Balance
+              </button>
+            </div>
           </div>
 
           {/* Notes */}
@@ -179,7 +229,7 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Partners agreed to allocate ₹10k to festival reserve"
+              placeholder="e.g. Organizers agreed to allocate ₹10k to event reserve"
               className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
             />
           </div>

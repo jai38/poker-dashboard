@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useLedger, Player } from '../../lib/store/ledgerStore'
 import { formatINR } from '../../lib/accounting/formatters'
 import { PlayerDetailModal } from './PlayerDetailModal'
@@ -8,51 +8,57 @@ import { Users, Search, PlusCircle, Wallet, ArrowUpDown } from 'lucide-react'
 
 export const PlayerList: React.FC = () => {
   const { players, historicalRake, payments } = useLedger()
-
   const [search, setSearch] = useState('')
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
+  const [activePlayerIdForAction, setActivePlayerIdForAction] = useState<string | undefined>(undefined)
   const [isAddRakeOpen, setIsAddRakeOpen] = useState(false)
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false)
-  const [activePlayerIdForAction, setActivePlayerIdForAction] = useState<string | undefined>(undefined)
   const [sortField, setSortField] = useState<'name' | 'generated' | 'paid' | 'outstanding'>('outstanding')
   const [sortAsc, setSortAsc] = useState(false)
 
-  // Compute stats for each player
-  const playerRows = players.map((player) => {
-    const generatedPaise = historicalRake
-      .filter((h) => h.playerId === player.id && h.status === 'active')
-      .reduce((sum, h) => sum + h.amountPaise, 0)
+  // Compute player ledger balances (source of truth)
+  const playerRows = useMemo(() => {
+    return players.map((player) => {
+      const generatedPaise = historicalRake
+        .filter((h) => h.playerId === player.id && h.status === 'active')
+        .reduce((sum, h) => sum + h.amountPaise, 0)
 
-    const paidPaise = payments
-      .filter((p) => p.playerId === player.id && p.status === 'active')
-      .reduce((sum, p) => sum + p.amountPaise, 0)
+      const paidPaise = payments
+        .filter((p) => p.playerId === player.id && p.status === 'active')
+        .reduce((sum, p) => sum + p.amountPaise, 0)
 
-    const outstandingPaise = Math.max(0, generatedPaise - paidPaise)
+      const outstandingPaise = Math.max(0, generatedPaise - paidPaise)
 
-    return {
-      player,
-      generatedPaise,
-      paidPaise,
-      outstandingPaise,
-    }
-  })
-
-  // Filter & Sort
-  const filteredRows = playerRows
-    .filter((row) => row.player.name.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => {
-      let comparison = 0
-      if (sortField === 'name') {
-        comparison = a.player.name.localeCompare(b.player.name)
-      } else if (sortField === 'generated') {
-        comparison = a.generatedPaise - b.generatedPaise
-      } else if (sortField === 'paid') {
-        comparison = a.paidPaise - b.paidPaise
-      } else if (sortField === 'outstanding') {
-        comparison = a.outstandingPaise - b.outstandingPaise
+      return {
+        player,
+        generatedPaise,
+        paidPaise,
+        outstandingPaise,
       }
-      return sortAsc ? comparison : -comparison
     })
+  }, [players, historicalRake, payments])
+
+  const filteredRows = useMemo(() => {
+    let result = playerRows.filter((r) =>
+      r.player.name.toLowerCase().includes(search.toLowerCase())
+    )
+
+    result.sort((a, b) => {
+      let cmp = 0
+      if (sortField === 'name') {
+        cmp = a.player.name.localeCompare(b.player.name)
+      } else if (sortField === 'generated') {
+        cmp = a.generatedPaise - b.generatedPaise
+      } else if (sortField === 'paid') {
+        cmp = a.paidPaise - b.paidPaise
+      } else if (sortField === 'outstanding') {
+        cmp = a.outstandingPaise - b.outstandingPaise
+      }
+      return sortAsc ? cmp : -cmp
+    })
+
+    return result
+  }, [playerRows, search, sortField, sortAsc])
 
   const totalGenerated = playerRows.reduce((s, r) => s + r.generatedPaise, 0)
   const totalPaid = playerRows.reduce((s, r) => s + r.paidPaise, 0)
@@ -68,7 +74,7 @@ export const PlayerList: React.FC = () => {
     setIsAddPaymentOpen(true)
   }
 
-  const toggleSort = (field: typeof sortField) => {
+  const toggleSort = (field: 'name' | 'generated' | 'paid' | 'outstanding') => {
     if (sortField === field) {
       setSortAsc(!sortAsc)
     } else {
@@ -84,10 +90,10 @@ export const PlayerList: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
             <Users className="w-5 h-5 text-indigo-400" />
-            <span>Players & Rake Ledger</span>
+            <span>Members & Contribution Ledger</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Individual player rake generation, payments received, and outstanding balances.
+            Individual member contributions, payments received, and outstanding balances.
           </p>
         </div>
 
@@ -97,7 +103,7 @@ export const PlayerList: React.FC = () => {
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors shadow-sm"
           >
             <PlusCircle className="w-4 h-4 text-indigo-400" />
-            <span>+ Add Rake</span>
+            <span>+ Add Fee</span>
           </button>
           <button
             onClick={() => handleOpenAddPaymentFor(undefined)}
@@ -114,34 +120,20 @@ export const PlayerList: React.FC = () => {
         <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
         <input
           type="text"
-          placeholder="Search by player name..."
+          placeholder="Search members..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+          className="w-full pl-9 pr-4 py-2 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
         />
       </div>
 
-      {/* Mobile Players Cards (sm:hidden) */}
-      <div className="block sm:hidden space-y-3">
-        {/* Mobile Summary Pill */}
-        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl grid grid-cols-3 gap-2 text-center text-xs">
-          <div>
-            <span className="text-[10px] text-slate-500 block uppercase">Players</span>
-            <span className="font-bold text-slate-200">{playerRows.length}</span>
-          </div>
-          <div>
-            <span className="text-[10px] text-slate-500 block uppercase">Collected</span>
-            <span className="font-bold text-emerald-400 font-mono">{formatINR(totalPaid)}</span>
-          </div>
-          <div>
-            <span className="text-[10px] text-slate-500 block uppercase">Total Due</span>
-            <span className="font-bold text-amber-400 font-mono">{formatINR(totalOutstanding)}</span>
-          </div>
-        </div>
-
+      {/* Mobile Card List (hidden sm:block) */}
+      <div className="sm:hidden space-y-3">
         {filteredRows.length === 0 ? (
-          <div className="p-8 text-center text-xs text-slate-500 bg-slate-900 border border-slate-800 rounded-xl">
-            No players found matching "{search}".
+          <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-xl">
+            <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+            <p className="text-sm font-medium text-slate-300">No members found</p>
+            <p className="text-xs text-slate-500 mt-1">Try a different search term or add a new member fee.</p>
           </div>
         ) : (
           filteredRows.map(({ player, generatedPaise, paidPaise, outstandingPaise }) => (
@@ -173,7 +165,7 @@ export const PlayerList: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/60 text-xs">
                 <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/50">
-                  <span className="text-[10px] text-slate-400 block font-sans uppercase">Total Rake</span>
+                  <span className="text-[10px] text-slate-400 block font-sans uppercase">Total Fees</span>
                   <span className="font-mono font-bold text-slate-200">{formatINR(generatedPaise)}</span>
                 </div>
                 <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/50">
@@ -203,7 +195,7 @@ export const PlayerList: React.FC = () => {
         )}
       </div>
 
-      {/* Players Table for Tablet/Desktop (hidden sm:block) */}
+      {/* Members Table for Tablet/Desktop */}
       <div className="hidden sm:block bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -214,7 +206,7 @@ export const PlayerList: React.FC = () => {
                   className="py-3 px-4 cursor-pointer hover:text-slate-200"
                 >
                   <div className="flex items-center gap-1">
-                    <span>Player</span>
+                    <span>Member</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-500" />
                   </div>
                 </th>
@@ -223,7 +215,7 @@ export const PlayerList: React.FC = () => {
                   className="py-3 px-4 text-right cursor-pointer hover:text-slate-200"
                 >
                   <div className="flex items-center justify-end gap-1">
-                    <span>Generated</span>
+                    <span>Fees Generated</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-500" />
                   </div>
                 </th>
@@ -305,7 +297,7 @@ export const PlayerList: React.FC = () => {
             <tfoot>
               <tr className="border-t border-slate-800 bg-slate-950/80 font-bold text-xs">
                 <td className="py-3.5 px-4 font-sans text-slate-300">
-                  Total ({playerRows.length} players)
+                  Total ({playerRows.length} members)
                 </td>
                 <td className="py-3.5 px-4 text-right font-mono text-slate-200">
                   {formatINR(totalGenerated)}

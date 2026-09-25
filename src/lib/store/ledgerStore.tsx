@@ -91,6 +91,8 @@ interface LedgerContextType {
   }) => Promise<PlayerPayment>
 
   voidPayment: (paymentId: string, reason: string) => Promise<void>
+  updatePaymentCollector: (paymentId: string, ownerId?: string) => Promise<void>
+  assignAllUnassignedPayments: (ownerId: string) => Promise<void>
 
   addSessionExpense: (
     gameId: string,
@@ -257,16 +259,50 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [expenses, setExpenses] = useState<GeneralExpense[]>([])
   const [settlements, setSettlements] = useState<OwnerSettlement[]>([])
   const [transfers, setTransfers] = useState<BucketTransfer[]>([])
+  const AUTH_SESSION_KEY = 'activity_ledger_auth_session'
+  const ADMIN_USER = 'admin'
+  const ADMIN_PASS = 'AdminPass2026!'
+
   const [settings, setSettings] = useState<AccountingSettings>(DEFAULT_ACCOUNTING_SETTINGS)
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isAuthenticated, setIsAuthenticated] = useState(!isSupabaseConfigured)
-  const [userEmail, setUserEmail] = useState<string | null>(isSupabaseConfigured ? null : 'admin@ledger.local')
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      const session = localStorage.getItem('activity_ledger_auth_session')
+      return Boolean(session)
+    } catch {
+      return false
+    }
+  })
+  const [userEmail, setUserEmail] = useState<string | null>(() => {
+    try {
+      const session = localStorage.getItem('activity_ledger_auth_session')
+      if (session) {
+        const parsed = JSON.parse(session)
+        return parsed.user || 'admin'
+      }
+    } catch {
+      // ignore
+    }
+    return null
+  })
 
   // Load state on mount (Cloud Supabase first if configured, LocalStorage cache as fallback)
   useEffect(() => {
     async function init() {
       setIsLoading(true)
+
+      // 0. Verify local auth session
+      try {
+        const session = localStorage.getItem(AUTH_SESSION_KEY)
+        if (session) {
+          const parsed = JSON.parse(session)
+          setIsAuthenticated(true)
+          setUserEmail(parsed.user || 'admin')
+        }
+      } catch {
+        // ignore
+      }
 
       // 1. Check local storage cache first to display immediately
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -429,16 +465,33 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       let loadedPayments: PlayerPayment[] = []
       if (dbPayments) {
-        loadedPayments = dbPayments.map((p: any) => ({
-          id: p.id,
-          playerId: p.player_id,
-          amountPaise: Number(p.amount_paise),
-          paidAt: p.paid_at,
-          notes: p.notes,
-          status: p.status,
-          voidReason: p.void_reason,
-          receivedByOwnerId: p.received_by_owner_id || undefined,
-        }))
+        // Read current local payments from state/localStorage to preserve receivedByOwnerId if Supabase column is missing
+        let currentLocalPayments: PlayerPayment[] = payments
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY)
+          if (raw) {
+            const parsed = JSON.parse(raw)
+            if (Array.isArray(parsed.payments)) {
+              currentLocalPayments = parsed.payments
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        loadedPayments = dbPayments.map((p: any) => {
+          const localMatch = currentLocalPayments.find((lp) => lp.id === p.id)
+          return {
+            id: p.id,
+            playerId: p.player_id,
+            amountPaise: Number(p.amount_paise),
+            paidAt: p.paid_at,
+            notes: p.notes,
+            status: p.status,
+            voidReason: p.void_reason,
+            receivedByOwnerId: p.received_by_owner_id || localMatch?.receivedByOwnerId || undefined,
+          }
+        })
         setPayments(loadedPayments)
       }
 
@@ -1133,6 +1186,65 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     addAudit('PAYMENT_VOIDED', 'payment', paymentId, { reason })
   }
 
+  // 5b. Update Collector Organizer for an Existing Payment
+  async function updatePaymentCollector(paymentId: string, ownerId?: string): Promise<void> {
+    const updated = payments.map((p) =>
+      p.id === paymentId ? { ...p, receivedByOwnerId: ownerId || undefined } : p
+    )
+    setPayments(updated)
+    persist({ payments: updated })
+
+    safeSupabaseOp(async (client) => {
+      try {
+        await client
+          .from('payments')
+          .update({ received_by_owner_id: ownerId || null })
+          .eq('id', paymentId)
+      } catch (e) {
+        console.warn('Could not update received_by_owner_id in Supabase:', e)
+      }
+    })
+
+    const targetOwner = owners.find((o) => o.id === ownerId)
+    addAudit('PAYMENT_COLLECTOR_UPDATED', 'payment', paymentId, {
+      receivedByOwnerId: ownerId,
+      ownerName: targetOwner?.name || 'Unassigned / Direct Bank',
+    })
+  }
+
+  // 5c. Batch Assign All Unassigned Payments to a Specific Organizer
+  async function assignAllUnassignedPayments(ownerId: string): Promise<void> {
+    const unassignedPaymentIds = payments
+      .filter((p) => p.status === 'active' && !p.receivedByOwnerId)
+      .map((p) => p.id)
+
+    if (unassignedPaymentIds.length === 0) return
+
+    const updated = payments.map((p) =>
+      !p.receivedByOwnerId && p.status === 'active' ? { ...p, receivedByOwnerId: ownerId } : p
+    )
+    setPayments(updated)
+    persist({ payments: updated })
+
+    safeSupabaseOp(async (client) => {
+      try {
+        await client
+          .from('payments')
+          .update({ received_by_owner_id: ownerId })
+          .in('id', unassignedPaymentIds)
+      } catch (e) {
+        console.warn('Could not update received_by_owner_id in Supabase batch:', e)
+      }
+    })
+
+    const targetOwner = owners.find((o) => o.id === ownerId)
+    addAudit('UNASSIGNED_PAYMENTS_BATCH_ASSIGNED', 'payment', undefined, {
+      receivedByOwnerId: ownerId,
+      ownerName: targetOwner?.name || ownerId,
+      count: unassignedPaymentIds.length,
+    })
+  }
+
   // 6. Add Expense
   async function addExpense(data: {
     type: 'session_expense' | 'monthly_expense' | 'credit_adjustment'
@@ -1684,11 +1796,11 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // 12. CSV Export
   function exportCSV(type: 'summary' | 'players' | 'games' | 'payments' | 'expenses' | 'settlements') {
-    let filename = `poker-ledger-${type}-${new Date().toISOString().split('T')[0]}.csv`
+    let filename = `activity-ledger-${type}-${new Date().toISOString().split('T')[0]}.csv`
     let csvContent = ''
 
     if (type === 'players') {
-      csvContent = 'Player Name,Total Rake Generated (INR),Total Paid (INR),Outstanding (INR)\n'
+      csvContent = 'Member Name,Total Fees Generated (INR),Total Paid (INR),Outstanding (INR)\n'
       for (const p of players) {
         const gen = historicalRake
           .filter((h) => h.playerId === p.id && h.status === 'active')
@@ -1747,6 +1859,10 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // 13. Auth
   async function signIn(email: string, pass: string) {
+    const trimmedUser = email.trim().toLowerCase()
+    const trimmedPass = pass.trim()
+
+    // 1. Try Supabase cloud auth if configured
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -1754,20 +1870,47 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       })
       if (!error && data.session) {
         setIsAuthenticated(true)
-        setUserEmail(data.session.user.email || null)
+        setUserEmail(data.session.user.email || trimmedUser)
+        try {
+          localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ user: data.session.user.email || trimmedUser, loggedInAt: Date.now() }))
+        } catch {
+          // ignore
+        }
+        return { error: null }
       }
-      return { error }
-    } else {
-      // Local development auth
+    }
+
+    // 2. Validate against admin credentials
+    const isAuthorizedAdmin =
+      (trimmedUser === 'admin' || trimmedUser === 'admin@ledger.local' || trimmedUser === 'admin@activityledger.local') &&
+      trimmedPass === 'AdminPass2026!'
+
+    if (isAuthorizedAdmin) {
       setIsAuthenticated(true)
-      setUserEmail(email || 'admin@ledger.local')
+      setUserEmail(email.trim())
+      try {
+        localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ user: email.trim(), loggedInAt: Date.now() }))
+      } catch {
+        // ignore
+      }
       return { error: null }
     }
+
+    return { error: new Error('Invalid username or password. Authorized admin: admin / AdminPass2026!') }
   }
 
   async function signOut() {
+    try {
+      localStorage.removeItem(AUTH_SESSION_KEY)
+    } catch {
+      // ignore
+    }
     if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut()
+      try {
+        await supabase.auth.signOut()
+      } catch {
+        // ignore
+      }
     }
     setIsAuthenticated(false)
     setUserEmail(null)
@@ -1798,6 +1941,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addHistoricalRake,
         addPayment,
         voidPayment,
+        updatePaymentCollector,
+        assignAllUnassignedPayments,
         addExpense,
         voidExpense,
         recordOwnerSettlement,

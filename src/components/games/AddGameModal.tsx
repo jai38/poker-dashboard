@@ -11,7 +11,6 @@ import {
   Users,
   UserCheck,
   Receipt,
-  UserPlus,
 } from 'lucide-react'
 import {
   calculateGameNetRake,
@@ -26,7 +25,7 @@ interface AddGameModalProps {
 
 interface GamePlayerRow {
   id: string
-  playerId: string // empty string if new player
+  playerId: string // empty string if new member
   newPlayerName: string
   amountRupees: string
   isPaid: boolean
@@ -52,15 +51,15 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
     }
   }, [hostOwnerId])
 
-  // Player rake attribution rows
+  // Member contribution attribution rows
   const [playerRows, setPlayerRows] = useState<GamePlayerRow[]>([])
 
-  // Session expenses: default paid by hosting owner
+  // Session expenses: default paid by hosting organizer
   const [expenses, setExpenses] = useState<SessionExpense[]>([
     {
       id: `exp-draft-${Date.now()}-0`,
       amountPaise: 0,
-      description: 'Refreshments / Electricity',
+      description: 'Refreshments / Venue / Supplies',
       paidByOwnerId: owners[0]?.id || '',
     },
   ])
@@ -68,7 +67,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
   const [error, setError] = useState<string>('')
   const [savedSuccess, setSavedSuccess] = useState<any | null>(null)
 
-  // Calculate player rows sum
+  // Calculate member rows sum
   const totalPlayerRakePaise = playerRows.reduce(
     (sum, r) => sum + parseRupeesToPaise(r.amountRupees),
     0
@@ -120,13 +119,16 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
     if (error) setError('')
   }
 
-  // Add a player contribution row
+  // Player row handlers
   const handleAddPlayerRow = () => {
+    const nextPlayer = players.find(
+      (p) => !playerRows.some((row) => row.playerId === p.id)
+    )
     setPlayerRows((prev) => [
       ...prev,
       {
-        id: `row-${Date.now()}-${prev.length}`,
-        playerId: players[0]?.id || '',
+        id: `player-row-${Date.now()}-${prev.length}`,
+        playerId: nextPlayer ? nextPlayer.id : '',
         newPlayerName: '',
         amountRupees: '',
         isPaid: false,
@@ -149,7 +151,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
     if (error) setError('')
   }
 
-  // Helper: distribute gross rake evenly among player rows
+  // Helper: distribute gross fee evenly among member rows
   const handleSplitRakeEvenly = () => {
     if (playerRows.length === 0 || grossRakePaise <= 0) return
     const eachPaise = Math.floor(grossRakePaise / playerRows.length)
@@ -162,7 +164,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
     )
   }
 
-  // Helper: sync gross rake input from player rows sum
+  // Helper: sync gross fee input from member rows sum
   const handleSyncGrossFromPlayers = () => {
     if (totalPlayerRakePaise > 0) {
       setGrossRakeInput((totalPlayerRakePaise / 100).toString())
@@ -210,33 +212,33 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
     setError('')
 
     if (grossRakePaise <= 0) {
-      setError('Gross rake must be greater than zero.')
+      setError('Gross fee must be greater than zero.')
       return
     }
 
     if (presentCount === 0) {
-      setError('At least one owner must be physically present/participating in the game.')
+      setError('At least one organizer must be present for the session.')
       return
     }
 
-    // Validate player rows if entered
+    // Validate member rows if entered
     if (playerRows.length > 0) {
       for (const row of playerRows) {
         if (!row.playerId && !row.newPlayerName.trim()) {
-          setError('Please select a player or type a name for each player row.')
+          setError('Please select a member or type a name for each member row.')
           return
         }
         if (parseRupeesToPaise(row.amountRupees) <= 0) {
-          setError('Each player rake amount must be greater than ₹0.')
+          setError('Each member fee amount must be greater than ₹0.')
           return
         }
       }
 
       if (totalPlayerRakePaise !== grossRakePaise) {
         setError(
-          `Player rake breakdown total (${formatINR(totalPlayerRakePaise)}) does not match Gross Rake (${formatINR(
+          `Member fee breakdown total (${formatINR(totalPlayerRakePaise)}) does not match Gross Fee (${formatINR(
             grossRakePaise
-          )}). Click "Sync from Players" or adjust amounts.`
+          )}). Click "Sync from Members" or adjust amounts.`
         )
         return
       }
@@ -270,7 +272,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
         totalExpenses: totalExpensePaise,
       })
     } catch (err: any) {
-      setError(err.message || 'Failed to save game.')
+      setError(err.message || 'Failed to save session.')
     }
   }
 
@@ -281,7 +283,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
       {
         id: `exp-draft-${Date.now()}-0`,
         amountPaise: 0,
-        description: 'Refreshments / Electricity',
+        description: 'Refreshments / Venue / Supplies',
         paidByOwnerId: hostOwnerId,
       },
     ])
@@ -295,8 +297,8 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
     <Modal
       isOpen={isOpen}
       onClose={handleResetAndClose}
-      title="Add Poker Game / Session"
-      subtitle="Pure waterfall accounting with player rake attribution & host expense reimbursement"
+      title="Record New Session"
+      subtitle="Waterfall accounting with member fee attribution & host expense reimbursement"
       maxWidth="lg"
     >
       {savedSuccess ? (
@@ -304,16 +306,16 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
           <div className="flex flex-col items-center text-center p-6 bg-emerald-950/30 border border-emerald-500/30 rounded-2xl">
             <CheckCircle2 className="w-12 h-12 text-emerald-400 mb-3" />
             <h4 className="text-lg font-bold text-slate-100">
-              Game #{savedSuccess.gameNumber} Saved Successfully!
+              Session #{savedSuccess.gameNumber} Saved Successfully!
             </h4>
             <p className="text-xs text-slate-300 mt-1">
-              Waterfall allocation completed. Host {savedSuccess.hostName} credited for expenses and player balances updated.
+              Waterfall allocation completed. Host {savedSuccess.hostName} credited for expenses and member balances updated.
             </p>
           </div>
 
           <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2.5 text-xs font-mono">
             <div className="flex justify-between text-slate-300">
-              <span className="font-sans">Hosting Partner:</span>
+              <span className="font-sans">Hosting Organizer:</span>
               <span className="font-bold text-slate-100">{savedSuccess.hostName}</span>
             </div>
             <div className="flex justify-between text-slate-300">
@@ -321,24 +323,24 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
               <span className="font-bold text-rose-400">{formatINR(savedSuccess.totalExpenses)}</span>
             </div>
             <div className="flex justify-between text-slate-300">
-              <span className="font-sans">Net Game Rake:</span>
+              <span className="font-sans">Net Session Fee:</span>
               <span className="font-bold text-emerald-400">{formatINR(savedSuccess.netRakePaise)}</span>
             </div>
             <div className="border-t border-slate-800 pt-2 flex justify-between text-indigo-300">
-              <span className="font-sans">Table Recovery Allocated:</span>
+              <span className="font-sans">Equipment Reserve Allocated:</span>
               <span>{formatINR(savedSuccess.tableRecoveryPaise)}</span>
             </div>
             <div className="flex justify-between text-indigo-300">
-              <span className="font-sans">Festival Reserve Allocated:</span>
+              <span className="font-sans">Event Reserve Allocated:</span>
               <span>{formatINR(savedSuccess.festivalFundPaise)}</span>
             </div>
             <div className="flex justify-between text-amber-400 font-bold">
-              <span className="font-sans">Distributable Owner Profit:</span>
+              <span className="font-sans">Distributable Organizer Balance:</span>
               <span>{formatINR(savedSuccess.distributableProfitPaise)}</span>
             </div>
             {savedSuccess.playerCount > 0 && (
               <div className="border-t border-slate-800 pt-2 text-slate-400 font-sans text-[11px]">
-                ✓ {savedSuccess.playerCount} player rake entries recorded in ledger.
+                ✓ {savedSuccess.playerCount} member fee entries recorded in ledger.
               </div>
             )}
           </div>
@@ -359,7 +361,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
             </div>
           )}
 
-          {/* Section 1: Date, Host Partner & Gross Rake */}
+          {/* Section 1: Date, Host Organizer & Gross Fee */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Date & Time */}
             <div className="space-y-1.5">
@@ -375,11 +377,11 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
               />
             </div>
 
-            {/* Hosting Partner */}
+            {/* Hosting Organizer */}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
                 <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Hosting Partner <span className="text-rose-400">*</span></span>
+                <span>Hosting Organizer <span className="text-rose-400">*</span></span>
               </label>
               <select
                 value={hostOwnerId}
@@ -401,11 +403,11 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
               </select>
             </div>
 
-            {/* Gross Rake */}
+            {/* Gross Fee */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-slate-300">
-                  Gross Rake (₹) <span className="text-rose-400">*</span>
+                  Gross Fee (₹) <span className="text-rose-400">*</span>
                 </label>
                 {totalPlayerRakePaise > 0 && totalPlayerRakePaise !== grossRakePaise && (
                   <button
@@ -413,7 +415,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                     onClick={handleSyncGrossFromPlayers}
                     className="text-[10px] text-indigo-400 hover:text-indigo-300 font-medium"
                   >
-                    Sync from Players ({formatINR(totalPlayerRakePaise)})
+                    Sync from Members ({formatINR(totalPlayerRakePaise)})
                   </button>
                 )}
               </div>
@@ -436,16 +438,16 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
             </div>
           </div>
 
-          {/* Section 2: Player-wise Rake Attribution */}
+          {/* Section 2: Member-wise Fee Attribution */}
           <div className="space-y-3 pt-2 border-t border-slate-800/80">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
               <div>
                 <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Player Rake Attribution</span>
+                  <span>Member Fee Attribution</span>
                 </label>
                 <p className="text-[11px] text-slate-400">
-                  Assign where this game's rake came from so individual player balances update accurately.
+                  Assign where this session's fees came from so individual member balances update accurately.
                 </p>
               </div>
 
@@ -465,7 +467,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                   className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-400 hover:text-indigo-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors shadow-sm"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>+ Add Player</span>
+                  <span>+ Add Member</span>
                 </button>
               </div>
             </div>
@@ -473,35 +475,35 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
             {playerRows.length === 0 ? (
               <div className="p-3 bg-slate-950/60 border border-dashed border-slate-800 rounded-xl text-center">
                 <p className="text-xs text-slate-400">
-                  No player breakdown added yet.{' '}
+                  No member breakdown added yet.{' '}
                   <button
                     type="button"
                     onClick={handleAddPlayerRow}
                     className="text-indigo-400 hover:underline font-semibold"
                   >
-                    Add players
+                    Add members
                   </button>{' '}
-                  to record who contributed to this ₹{grossRakeInput || '0'} rake!
+                  to record who contributed to this ₹{grossRakeInput || '0'} fee!
                 </p>
               </div>
             ) : (
               <div className="space-y-2">
-                {playerRows.map((row, idx) => (
+                {playerRows.map((row) => (
                   <div
                     key={row.id}
                     className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2.5 shadow-sm"
                   >
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
-                      {/* Player Select / Input */}
+                      {/* Member Select / Input */}
                       <div className="sm:col-span-5">
                         <label className="text-[10px] text-slate-400 block sm:hidden font-medium mb-1">
-                          Player Name
+                          Member Name
                         </label>
                         {row.playerId === '' && players.length > 0 ? (
                           <div className="flex items-center gap-1.5">
                             <input
                               type="text"
-                              placeholder="Type new player name"
+                              placeholder="Type new member name"
                               value={row.newPlayerName}
                               onChange={(e) =>
                                 handlePlayerRowChange(row.id, 'newPlayerName', e.target.value)
@@ -524,7 +526,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                               onChange={(e) => handlePlayerRowChange(row.id, 'playerId', e.target.value)}
                               className="flex-1 px-3 py-1.5 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
                             >
-                              <option value="">➕ New Player...</option>
+                              <option value="">➕ New Member...</option>
                               {players.map((p) => (
                                 <option key={p.id} value={p.id}>
                                   {p.name}
@@ -534,7 +536,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                             {row.playerId === '' && (
                               <input
                                 type="text"
-                                placeholder="Player name"
+                                placeholder="Member name"
                                 value={row.newPlayerName}
                                 onChange={(e) =>
                                   handlePlayerRowChange(row.id, 'newPlayerName', e.target.value)
@@ -546,10 +548,10 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                         )}
                       </div>
 
-                      {/* Rake Amount */}
+                      {/* Fee Amount */}
                       <div className="sm:col-span-3">
                         <label className="text-[10px] text-slate-400 block sm:hidden font-medium mb-1">
-                          Rake Amount (₹)
+                          Fee Amount (₹)
                         </label>
                         <div className="relative">
                           <span className="absolute left-2.5 top-1.5 text-xs text-slate-500">₹</span>
@@ -591,7 +593,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                               handlePlayerRowChange(row.id, 'receivedByOwnerId', e.target.value)
                             }
                             className="px-2 py-1 text-[11px] bg-slate-900 border border-emerald-500/40 rounded text-emerald-300 focus:outline-none"
-                            title="Owner who received this player payment"
+                            title="Organizer who received this payment"
                           >
                             {owners.map((o) => (
                               <option key={o.id} value={o.id}>
@@ -608,7 +610,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                           type="button"
                           onClick={() => handleRemovePlayerRow(row.id)}
                           className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg transition-colors"
-                          title="Remove player"
+                          title="Remove member"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -617,15 +619,15 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                   </div>
                 ))}
 
-                {/* Player attribution summary footer */}
+                {/* Member attribution summary footer */}
                 <div className="flex items-center justify-between text-xs px-1 text-slate-400 font-mono">
                   <span>
-                    Total from {playerRows.length} player{playerRows.length > 1 ? 's' : ''}:{' '}
+                    Total from {playerRows.length} member{playerRows.length > 1 ? 's' : ''}:{' '}
                     <strong className="text-slate-200">{formatINR(totalPlayerRakePaise)}</strong>
                   </span>
                   {totalPlayerRakePaise !== grossRakePaise && (
                     <span className="text-amber-400 font-sans text-[11px]">
-                      Diff vs Gross Rake: {formatINR(Math.abs(grossRakePaise - totalPlayerRakePaise))}
+                      Diff vs Gross Fee: {formatINR(Math.abs(grossRakePaise - totalPlayerRakePaise))}
                     </span>
                   )}
                 </div>
@@ -633,11 +635,11 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
             )}
           </div>
 
-          {/* Section 3: Owners Present Attendance */}
+          {/* Section 3: Organizers Present Attendance */}
           <div className="space-y-2 pt-2 border-t border-slate-800/80">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Partners Present / Playing <span className="text-rose-400">*</span>
+                Organizers Present <span className="text-rose-400">*</span>
               </label>
               <span
                 className={`text-xs font-medium ${
@@ -685,7 +687,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
             </div>
           </div>
 
-          {/* Section 4: Session Expenses (Assigned to Hosting Partner) */}
+          {/* Section 4: Session Expenses */}
           <div className="space-y-3 pt-2 border-t border-slate-800/80">
             <div className="flex items-center justify-between">
               <div>
@@ -694,7 +696,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                   <span>Session Expenses (Reimbursable Out of Pocket)</span>
                 </label>
                 <p className="text-[11px] text-slate-400">
-                  Incurred by the host (snacks, drinks, electricity). Reimbursed before profit distribution.
+                  Incurred by the host (supplies, refreshments, electricity). Reimbursed before distribution.
                 </p>
               </div>
               <button
@@ -715,7 +717,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                 >
                   <input
                     type="text"
-                    placeholder="e.g. Refreshments, Electricity, Cards"
+                    placeholder="e.g. Refreshments, Venue, Supplies"
                     value={expense.description}
                     onChange={(e) => handleExpenseChange(idx, 'description', e.target.value)}
                     className="flex-1 min-w-[140px] px-3 py-1.5 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
@@ -735,7 +737,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                     value={expense.paidByOwnerId || hostOwnerId}
                     onChange={(e) => handleExpenseChange(idx, 'paidByOwnerId', e.target.value)}
                     className="w-36 shrink-0 px-2 py-1.5 text-[11px] bg-slate-900 border border-slate-800 rounded-lg text-slate-200 font-semibold focus:outline-none focus:border-indigo-500"
-                    title="Partner who paid this out of pocket and will be reimbursed"
+                    title="Organizer who paid this out of pocket and will be reimbursed"
                   >
                     {owners.map((o) => (
                       <option key={o.id} value={o.id}>
@@ -761,13 +763,13 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
               <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-400 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>
-                  Expenses exceed gross rake by {formatINR(uncoveredExpensePaise)}. Net rake will be ₹0 and remaining expense is recorded.
+                  Expenses exceed gross fee by {formatINR(uncoveredExpensePaise)}. Net fee will be ₹0 and remaining expense is recorded.
                 </span>
               </div>
             )}
           </div>
 
-          {/* Section 5: Pure Waterfall Calculation Preview */}
+          {/* Section 5: Waterfall Calculation Preview */}
           {grossRakePaise > 0 && (
             <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
@@ -775,7 +777,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                   Waterfall Accounting Preview
                 </h5>
                 <span className="text-[10px] text-indigo-400 font-mono">
-                  Target: Table (₹65k) → Festival (₹30k) → Profit
+                  Target: Equipment Reserve (₹65k) → Event Fund (₹30k) → Pool
                 </span>
               </div>
 
@@ -787,13 +789,13 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                   </div>
                 </div>
                 <div className="p-2 bg-slate-900 rounded-lg border border-slate-800">
-                  <span className="text-slate-400 text-[10px] block">Net Rake</span>
+                  <span className="text-slate-400 text-[10px] block">Net Fee</span>
                   <div className="font-mono font-bold text-emerald-400 mt-0.5">
                     {formatINR(netRakePaise)}
                   </div>
                 </div>
                 <div className="p-2 bg-slate-900 rounded-lg border border-slate-800">
-                  <span className="text-slate-400 text-[10px] block">Owner Profit</span>
+                  <span className="text-slate-400 text-[10px] block">Organizer Pool</span>
                   <div className="font-mono font-bold text-indigo-400 mt-0.5">
                     {formatINR(projectedAlloc.distributableRakePaise)}
                   </div>
@@ -803,7 +805,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
               {projectedAlloc.distributableRakePaise > 0 && Object.keys(projectedDistributions).length > 0 && (
                 <div className="pt-2 border-t border-slate-800/80">
                   <span className="text-[10px] text-slate-400 uppercase font-medium">
-                    Owner Profit Shares (₹1,000 Equal + Attendance):
+                    Organizer Shares (₹1,000 Equal + Attendance):
                   </span>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5 text-xs font-mono">
                     {owners.map((o) => (
@@ -828,7 +830,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
             <label className="text-xs font-medium text-slate-300">Notes (Optional)</label>
             <input
               type="text"
-              placeholder="e.g. 5/10 NLH session with deep stacks"
+              placeholder="e.g. Weekend evening session at clubhouse"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"

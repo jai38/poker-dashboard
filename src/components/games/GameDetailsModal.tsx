@@ -4,7 +4,7 @@ import { ConfirmDialog } from '../common/ConfirmDialog'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { formatINR, formatDateTime, parseRupeesToPaise } from '../../lib/accounting/formatters'
 import { GameCalculationResult, GameRecord } from '../../lib/accounting/types'
-import { AlertTriangle, Ban, Calendar, CheckCircle2, Plus, Receipt, ShieldAlert, Trash2 } from 'lucide-react'
+import { Ban, CheckCircle2, Plus, Receipt, ShieldAlert, Trash2 } from 'lucide-react'
 
 interface GameDetailsModalProps {
   gameRecord: GameRecord | null
@@ -85,7 +85,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={`Game #${liveGame.gameNumber} Details`}
+        title={`Session #${liveGame.gameNumber} Details`}
         subtitle={formatDateTime(liveGame.playedAt)}
         maxWidth="lg"
       >
@@ -96,7 +96,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
               <ShieldAlert className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
               <div>
                 <div className="text-xs font-bold uppercase tracking-wider text-rose-400">
-                  Game Voided (Excluded from Accounting)
+                  Session Voided (Excluded from Accounting)
                 </div>
                 <p className="text-xs text-rose-200 mt-0.5">
                   Reason: {gameRecord.voidReason || 'No reason provided'}
@@ -113,10 +113,10 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
             </div>
           )}
 
-          {/* Rake & Net Pipeline */}
+          {/* Fee & Net Pipeline */}
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg">
-              <span className="text-[10px] uppercase font-bold text-slate-400">Gross Rake</span>
+              <span className="text-[10px] uppercase font-bold text-slate-400">Gross Fee</span>
               <div className="text-sm font-bold text-slate-100 mt-1 font-mono">
                 {formatINR(liveGame.grossRakePaise)}
               </div>
@@ -128,7 +128,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
               </div>
             </div>
             <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg">
-              <span className="text-[10px] uppercase font-bold text-slate-400">Net Rake</span>
+              <span className="text-[10px] uppercase font-bold text-slate-400">Net Fee</span>
               <div className="text-sm font-bold text-emerald-400 mt-1 font-mono">
                 {formatINR(liveGameResult?.netRakePaise || 0)}
               </div>
@@ -149,35 +149,42 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                   className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-lg transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>+ Add Expense</span>
+                  <span>Add Expense</span>
                 </button>
               )}
             </div>
 
-            {liveGame.expenses && liveGame.expenses.length > 0 ? (
-              <div className="divide-y divide-slate-800/80 text-xs">
-                {liveGame.expenses.map((exp, idx) => {
-                  const payer = owners.find((o) => o.id === exp.paidByOwnerId)
+            {liveGame.expenses.length === 0 ? (
+              <div className="text-center py-3 text-xs text-slate-500 italic border border-dashed border-slate-800/80 rounded-lg">
+                No session expenses recorded for this session.
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {liveGame.expenses.map((expense) => {
+                  const payer = owners.find((o) => o.id === expense.paidByOwnerId)
                   return (
-                    <div key={exp.id || idx} className="flex items-center justify-between py-2 group">
-                      <div className="flex flex-col">
-                        <span className="text-slate-200 font-medium">{exp.description || 'Session Expense'}</span>
+                    <div
+                      key={expense.id}
+                      className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-200 font-medium">{expense.description}</span>
                         {payer && (
-                          <span className="text-[11px] text-slate-400">
-                            Paid by: <span className="text-slate-300 font-medium">{payer.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                            Paid by: {payer.name}
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         <span className="font-mono font-bold text-rose-400">
-                          - {formatINR(exp.amountPaise)}
+                          - {formatINR(expense.amountPaise)}
                         </span>
-                        {!isVoided && exp.id && (
+                        {!isVoided && expense.id && (
                           <button
                             type="button"
-                            onClick={() => handleRemoveExpense(exp.id!)}
+                            onClick={() => handleRemoveExpense(expense.id!)}
+                            className="text-slate-500 hover:text-rose-400 p-1 rounded"
                             title="Remove expense"
-                            className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -187,53 +194,45 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                   )
                 })}
               </div>
-            ) : (
-              <div className="py-2 text-xs text-slate-500 italic">
-                No session expenses recorded for this game yet.
-              </div>
             )}
 
-            {/* Inline Add Expense Form */}
-            {isAddingExpense && (
-              <form onSubmit={handleAddExpense} className="pt-2 border-t border-slate-800 space-y-2.5">
-                <div className="text-xs font-semibold text-slate-200">Add Session Expense</div>
+            {/* Quick Add Expense Form */}
+            {isAddingExpense && !isVoided && (
+              <form onSubmit={handleAddExpense} className="p-3 bg-slate-900 border border-indigo-500/30 rounded-lg space-y-2 mt-2">
+                <span className="text-xs font-semibold text-slate-200 block">Add Expense to this Session</span>
                 {expenseError && (
-                  <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded text-rose-400 text-xs">
+                  <div className="text-xs text-rose-400 p-1.5 bg-rose-500/10 rounded">
                     {expenseError}
                   </div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <div className="sm:col-span-2">
-                    <label className="block text-[10px] uppercase text-slate-400 font-medium mb-1">Description</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Refreshments, Electricity, Food"
-                      value={expenseDesc}
-                      onChange={(e) => setExpenseDesc(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-rose-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] uppercase text-slate-400 font-medium mb-1">Amount (₹)</label>
+                  <input
+                    type="text"
+                    placeholder="Description (e.g. Refreshments)"
+                    value={expenseDesc}
+                    onChange={(e) => setExpenseDesc(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+                    autoFocus
+                  />
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1.5 text-xs text-slate-500">₹</span>
                     <input
                       type="number"
-                      placeholder="0"
+                      min="1"
+                      placeholder="Amount"
                       value={expenseRupees}
                       onChange={(e) => setExpenseRupees(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-rose-500 font-mono"
+                      className="w-full pl-6 pr-2 py-1.5 text-xs font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase text-slate-400 font-medium mb-1">Paid By Owner</label>
                   <select
                     value={expensePaidBy}
                     onChange={(e) => setExpensePaidBy(e.target.value)}
-                    className="w-full px-2.5 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:border-rose-500"
+                    className="px-2 py-1.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
                   >
                     {owners.map((o) => (
                       <option key={o.id} value={o.id}>
-                        {o.name}
+                        Paid by: {o.name}
                       </option>
                     ))}
                   </select>
@@ -261,45 +260,45 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
             )}
           </div>
 
-          {/* Waterfall Allocation (Table, Festival, Distributable) */}
+          {/* Waterfall Allocation */}
           <div className="p-4 bg-slate-950 border border-slate-800 rounded-lg space-y-2">
             <h5 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Waterfall Allocation for this Game
+              Waterfall Allocation for this Session
             </h5>
             <div className="flex justify-between text-xs py-1 border-b border-slate-800">
-              <span className="text-slate-400">Allocated to Table Recovery:</span>
+              <span className="text-slate-400">Allocated to Equipment Reserve:</span>
               <span className="font-mono text-amber-400 font-bold">
                 {formatINR(liveGameResult?.tableRecoveryAllocatedPaise || 0)}
               </span>
             </div>
             <div className="flex justify-between text-xs py-1 border-b border-slate-800">
-              <span className="text-slate-400">Allocated to Festival Fund:</span>
+              <span className="text-slate-400">Allocated to Event Fund:</span>
               <span className="font-mono text-purple-400 font-bold">
                 {formatINR(liveGameResult?.festivalFundAllocatedPaise || 0)}
               </span>
             </div>
             <div className="flex justify-between text-xs py-1">
-              <span className="text-slate-400">Remaining Distributable Rake:</span>
+              <span className="text-slate-400">Remaining Distributable Balance:</span>
               <span className="font-mono text-emerald-400 font-bold">
                 {formatINR(liveGameResult?.distributableRakePaise || 0)}
               </span>
             </div>
           </div>
 
-          {/* Owner Attendance & Entitlements */}
+          {/* Organizer Attendance & Entitlements */}
           <div className="space-y-3">
             <h5 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-              Owner Attendance & Resulting Distribution
+              Organizer Attendance & Resulting Distribution
             </h5>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-slate-800 text-slate-400 font-medium">
-                    <th className="py-2">Owner</th>
+                    <th className="py-2">Organizer</th>
                     <th className="py-2 text-center">Attendance</th>
                     <th className="py-2 text-right">Equal Share</th>
                     <th className="py-2 text-right">Excess Share</th>
-                    <th className="py-2 text-right font-bold">Game Payout</th>
+                    <th className="py-2 text-right font-bold">Session Payout</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 font-mono">
@@ -353,10 +352,10 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
               >
                 <Ban className="w-3.5 h-3.5" />
-                <span>Void Game</span>
+                <span>Void Session</span>
               </button>
             ) : (
-              <span className="text-xs text-slate-500 italic">This game is voided.</span>
+              <span className="text-xs text-slate-500 italic">This session is voided.</span>
             )}
 
             <button
@@ -374,12 +373,12 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
         isOpen={isVoidDialogOpen}
         onClose={() => setIsVoidDialogOpen(false)}
         onConfirm={handleVoidConfirm}
-        title={`Void Game #${gameRecord.gameNumber}`}
-        message="Are you sure you want to void this game? Financial calculations will be immediately recalculated with this game excluded. Financial records are never hard-deleted."
-        confirmText="Void Game"
+        title={`Void Session #${gameRecord.gameNumber}`}
+        message="Are you sure you want to void this session? Financial calculations will be immediately recalculated with this session excluded. Financial records are never hard-deleted."
+        confirmText="Void Session"
         isDestructive
         requireReason
-        reasonPlaceholder="e.g. Duplicate game entered by mistake"
+        reasonPlaceholder="e.g. Duplicate session entered by mistake"
       />
     </>
   )

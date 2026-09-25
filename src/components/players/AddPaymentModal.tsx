@@ -48,7 +48,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     setError('')
 
     if (!selectedPlayerId) {
-      setError('Please select a player.')
+      setError('Please select a member.')
       return
     }
 
@@ -75,7 +75,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         receivedByOwnerId: receivedByOwnerId || undefined,
       })
 
-      const receiverName = owners.find((o) => o.id === receivedByOwnerId)?.name || 'Table Pool'
+      const receiverName = owners.find((o) => o.id === receivedByOwnerId)?.name || 'Activity Pool'
       setSuccessMsg(
         `Recorded ${formatINR(amountPaise)} payment for ${selectedPlayer?.name} (Received by: ${receiverName}). Remaining outstanding: ${formatINR(
           playerOutstandingPaise - amountPaise
@@ -98,7 +98,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={handleResetAndClose} title="Record Player Rake Payment" maxWidth="md">
+    <Modal isOpen={isOpen} onClose={handleResetAndClose} title="Record Member Payment" maxWidth="md">
       <form onSubmit={handleSave} className="space-y-4">
         {error && (
           <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs font-medium text-rose-400">
@@ -114,10 +114,10 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
           </div>
         )}
 
-        {/* Player Selector */}
+        {/* Member Selector */}
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-slate-300">
-            Player <span className="text-rose-400">*</span>
+            Member <span className="text-rose-400">*</span>
           </label>
           <select
             value={selectedPlayerId}
@@ -128,7 +128,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
             required
           >
-            <option value="">-- Choose Player --</option>
+            <option value="">-- Choose Member --</option>
             {players.map((p) => {
               const gen = historicalRake
                 .filter((h) => h.playerId === p.id && h.status === 'active')
@@ -147,7 +147,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
           </select>
         </div>
 
-        {/* Player Account Overview */}
+        {/* Member Account Overview */}
         {selectedPlayer && (
           <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg grid grid-cols-3 gap-2 text-center text-xs font-mono">
             <div>
@@ -199,10 +199,10 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
           </div>
         </div>
 
-        {/* Received By Partner Account (Cash Custody) */}
+        {/* Received By Organizer Account */}
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
-            <span>Received By Partner <span className="text-rose-400">*</span></span>
+            <span>Received By Organizer <span className="text-rose-400">*</span></span>
             <span className="text-[10px] text-indigo-400 font-normal">Personal UPI / Bank</span>
           </label>
           <select
@@ -215,10 +215,10 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                 {o.name} (Personal UPI / Bank)
               </option>
             ))}
-            <option value="">Shared Table Pool / Unassigned</option>
+            <option value="">Shared Activity Pool / Unassigned</option>
           </select>
           <p className="text-[11px] text-slate-400">
-            Tracks who physically holds this money so partner profit & expense balances square up accurately.
+            Tracks who physically holds this money so organizer pool & expense balances square up accurately.
           </p>
         </div>
 
