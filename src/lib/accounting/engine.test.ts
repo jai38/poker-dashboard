@@ -789,6 +789,102 @@ describe('Pure Accounting Engine Specification Tests', () => {
     expect(summary.ownerEntitlements['o1'].netCashHeldPaise).toBe(-500 * 100)
     expect(summary.reconciled).toBe(true)
   })
+
+  // Test 26: Cash-basis split of collected player payments (partial collection)
+  it('Test 26: When player owes ₹12,200 but pays only ₹10,000 to one owner, splits the ₹10,000 cash equally (₹2,500 each) and preserves ₹2,200 pending', () => {
+    // Player Anmol was billed ₹12,200 rake
+    const historicalRake = [
+      {
+        id: 'hist-anmol',
+        playerId: 'player-anmol',
+        amountPaise: 12200 * 100, // ₹12,200
+        entryDate: '2026-09-01T20:00:00Z',
+        status: 'active' as const,
+      },
+    ]
+
+    // Anmol paid ₹10,000 to Owner 3 (Tanna)
+    const payments = [
+      {
+        id: 'pay-1',
+        playerId: 'player-anmol',
+        amountPaise: 1000 * 100, // ₹1,000
+        paidAt: '2026-09-02T10:00:00Z',
+        status: 'active' as const,
+        receivedByOwnerId: 'o3',
+      },
+      {
+        id: 'pay-2',
+        playerId: 'player-anmol',
+        amountPaise: 9000 * 100, // ₹9,000
+        paidAt: '2026-09-02T12:00:00Z',
+        status: 'active' as const,
+        receivedByOwnerId: 'o3',
+      },
+    ]
+
+    const summary = calculateLedgerSummary({
+      owners: mockOwnerDefs, // o1: Jai, o2: Kunal, o3: Tanna, o4: Sachin
+      games: [],
+      historicalRake,
+      payments,
+      expenses: [],
+      settlements: [],
+    })
+
+    // 1. Aggregates
+    expect(summary.totalRakeGeneratedPaise).toBe(12200 * 100) // ₹12,200
+    expect(summary.totalRakeCollectedPaise).toBe(10000 * 100) // ₹10,000
+    expect(summary.totalOutstandingPaise).toBe(2200 * 100) // ₹2,200
+
+    // 2. Gross / Accrued Entitlements (on paper, ₹3,050 each)
+    expect(summary.ownerEntitlements['o1'].grossEntitlementPaise).toBe(3050 * 100)
+    expect(summary.ownerEntitlements['o2'].grossEntitlementPaise).toBe(3050 * 100)
+    expect(summary.ownerEntitlements['o3'].grossEntitlementPaise).toBe(3050 * 100)
+    expect(summary.ownerEntitlements['o4'].grossEntitlementPaise).toBe(3050 * 100)
+
+    // 3. Cash Entitlements (actual cash in hand split 4 ways: ₹2,500 each)
+    expect(summary.ownerEntitlements['o1'].cashEntitlementPaise).toBe(2500 * 100)
+    expect(summary.ownerEntitlements['o2'].cashEntitlementPaise).toBe(2500 * 100)
+    expect(summary.ownerEntitlements['o3'].cashEntitlementPaise).toBe(2500 * 100)
+    expect(summary.ownerEntitlements['o4'].cashEntitlementPaise).toBe(2500 * 100)
+
+    // 4. Pending / Uncollected Entitlements from Anmol (₹550 each)
+    expect(summary.ownerEntitlements['o1'].uncollectedEntitlementPaise).toBe(550 * 100)
+    expect(summary.ownerEntitlements['o2'].uncollectedEntitlementPaise).toBe(550 * 100)
+    expect(summary.ownerEntitlements['o3'].uncollectedEntitlementPaise).toBe(550 * 100)
+    expect(summary.ownerEntitlements['o4'].uncollectedEntitlementPaise).toBe(550 * 100)
+
+    // 5. Cash Positions:
+    // o3 collected ₹10,000 cash; entitlement is ₹2,500 -> owes ₹7,500
+    expect(summary.ownerEntitlements['o3'].cashCollectedPaise).toBe(10000 * 100)
+    expect(summary.ownerEntitlements['o3'].netCashHeldPaise).toBe(10000 * 100)
+    expect(summary.ownerEntitlements['o3'].netPositionPaise).toBe(-7500 * 100)
+
+    // o1, o2, o4 held ₹0 cash; entitlement is ₹2,500 -> each is owed ₹2,500
+    expect(summary.ownerEntitlements['o1'].netPositionPaise).toBe(2500 * 100)
+    expect(summary.ownerEntitlements['o2'].netPositionPaise).toBe(2500 * 100)
+    expect(summary.ownerEntitlements['o4'].netPositionPaise).toBe(2500 * 100)
+
+    // 6. Actionable P2P Recommended Transfers:
+    // Tanna (o3) sends ₹2,500 to Jai (o1), ₹2,500 to Kunal (o2), ₹2,500 to Sachin (o4)
+    expect(summary.recommendedTransfers).toHaveLength(3)
+    const transfersFromO3 = summary.recommendedTransfers.filter((t) => t.fromOwnerId === 'o3')
+    expect(transfersFromO3).toHaveLength(3)
+
+    const transferToO1 = summary.recommendedTransfers.find((t) => t.toOwnerId === 'o1')
+    const transferToO2 = summary.recommendedTransfers.find((t) => t.toOwnerId === 'o2')
+    const transferToO4 = summary.recommendedTransfers.find((t) => t.toOwnerId === 'o4')
+
+    expect(transferToO1?.amountPaise).toBe(2500 * 100) // ₹2,500
+    expect(transferToO2?.amountPaise).toBe(2500 * 100) // ₹2,500
+    expect(transferToO4?.amountPaise).toBe(2500 * 100) // ₹2,500
+
+    // Total transfers = ₹7,500. Tanna retains ₹2,500. All 4 owners have exactly ₹2,500 in pocket.
+    const totalTransferred = summary.recommendedTransfers.reduce((sum, t) => sum + t.amountPaise, 0)
+    expect(totalTransferred).toBe(7500 * 100)
+    expect(summary.reconciled).toBe(true)
+  })
 })
 
 

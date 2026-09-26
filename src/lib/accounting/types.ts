@@ -201,6 +201,8 @@ export interface LedgerSummary {
     equalSharePaise: number
     excessSharePaise: number
     grossEntitlementPaise: number
+    cashEntitlementPaise: number
+    uncollectedEntitlementPaise: number
     settledPaise: number
     remainingEntitlementPaise: number
     cashCollectedPaise: number
@@ -212,6 +214,8 @@ export interface LedgerSummary {
   }>
   totalOwnerPoolPaise: number
   totalOwnerEntitlementPaise: number
+  totalOwnerCashEntitlementPaise?: number
+  totalOwnerUncollectedEntitlementPaise?: number
   totalOwnerSettledPaise: number
   remainingOwnerSettlementPaise: number
 

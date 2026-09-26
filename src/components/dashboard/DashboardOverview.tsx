@@ -406,6 +406,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                         </td>
                         <td className="py-3 text-right font-bold text-emerald-400">
                           {formatINR(ent?.grossEntitlementPaise || 0)}
+                          {summary.totalOutstandingPaise > 0 && (
+                            <div className="text-[10px] text-slate-400 font-normal font-sans mt-0.5">
+                              Cash: {formatINR(ent?.cashEntitlementPaise || 0)} · Due: {formatINR(ent?.uncollectedEntitlementPaise || 0)}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )
@@ -422,6 +427,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     </td>
                     <td className="py-3 text-right font-mono text-emerald-400">
                       {formatINR(summary.totalOwnerEntitlementPaise)}
+                      {summary.totalOutstandingPaise > 0 && (
+                        <div className="text-[10px] text-slate-400 font-normal font-sans mt-0.5">
+                          Cash: {formatINR(summary.totalOwnerCashEntitlementPaise || 0)} · Due: {formatINR(summary.totalOwnerUncollectedEntitlementPaise || 0)}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 </tfoot>
@@ -447,6 +457,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                         <span>·</span>
                         <span>Profit: {formatINR(profitShare)}</span>
                       </div>
+                      {summary.totalOutstandingPaise > 0 && (
+                        <div className="text-[10px] text-slate-400 mt-1 font-mono flex items-center gap-1.5">
+                          <span className="text-emerald-400 font-medium">Cash: {formatINR(ent?.cashEntitlementPaise || 0)}</span>
+                          <span>·</span>
+                          <span className="text-amber-400 font-medium">Pending: {formatINR(ent?.uncollectedEntitlementPaise || 0)}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold font-mono text-emerald-400">

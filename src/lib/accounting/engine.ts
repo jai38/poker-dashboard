@@ -334,6 +334,8 @@ export function calculateLedgerSummary(params: {
       equalSharePaise: 0,
       excessSharePaise: 0,
       grossEntitlementPaise: 0,
+      cashEntitlementPaise: 0,
+      uncollectedEntitlementPaise: 0,
       settledPaise: 0,
       remainingEntitlementPaise: 0,
       cashCollectedPaise: 0,
@@ -359,6 +361,8 @@ export function calculateLedgerSummary(params: {
           equalSharePaise: 0,
           excessSharePaise: 0,
           grossEntitlementPaise: 0,
+          cashEntitlementPaise: 0,
+          uncollectedEntitlementPaise: 0,
           settledPaise: 0,
           remainingEntitlementPaise: 0,
           cashCollectedPaise: 0,
@@ -490,6 +494,8 @@ export function calculateLedgerSummary(params: {
               equalSharePaise: 0,
               excessSharePaise: 0,
               grossEntitlementPaise: 0,
+              cashEntitlementPaise: 0,
+              uncollectedEntitlementPaise: 0,
               settledPaise: 0,
               remainingEntitlementPaise: 0,
               cashCollectedPaise: 0,
@@ -559,16 +565,87 @@ export function calculateLedgerSummary(params: {
     }
   }
 
+  // Calculate Cash Basis Entitlements vs Uncollected Accrued Entitlements
+  // Organizers can only equalize/transfer cash that has actually been collected from members.
+  // Uncollected member dues remain pending and are only distributed once received.
+  const totalGrossOwnerPoolPaise = currentTableAccumulatedPaise + totalDistributableRakePaise
+
+  if (activePayments.length === 0 && totalRakeCollectedPaise === 0) {
+    // When no payments are tracked in the database (e.g. pure game tests), fallback to gross entitlement
+    for (const ent of Object.values(ownerEntitlements)) {
+      ent.cashEntitlementPaise = ent.grossEntitlementPaise
+      ent.uncollectedEntitlementPaise = 0
+    }
+  } else {
+    // Waterfall on actual cash collected:
+    // 1. Table Recovery (reimburses owners equally up to table target)
+    const collectedTableRecoveryPaise = Math.min(
+      totalRakeCollectedPaise,
+      settings.tableRecoveryTargetPaise
+    )
+    const remainingCashAfterTable = Math.max(
+      0,
+      totalRakeCollectedPaise - settings.tableRecoveryTargetPaise
+    )
+    // 2. Festival Fund (retained as community table reserve, not distributed to owners)
+    const collectedFestivalFundPaise = Math.min(
+      remainingCashAfterTable,
+      settings.festivalFundTargetPaise
+    )
+    // 3. Distributable Profit (distributed to owners)
+    const collectedProfitPaise = Math.max(
+      0,
+      remainingCashAfterTable - settings.festivalFundTargetPaise
+    )
+
+    // Total cash collected that belongs to the organizers
+    const totalCollectedOwnerPoolPaise = Math.min(
+      totalGrossOwnerPoolPaise,
+      collectedTableRecoveryPaise + collectedProfitPaise
+    )
+
+    const ownerList = Object.values(ownerEntitlements)
+    let remainingPoolToDistribute = totalCollectedOwnerPoolPaise
+
+    for (let i = 0; i < ownerList.length; i++) {
+      const ent = ownerList[i]
+      if (i === ownerList.length - 1) {
+        // Last owner gets exact remaining to prevent 1-paise rounding discrepancies
+        ent.cashEntitlementPaise = Math.max(0, remainingPoolToDistribute)
+      } else {
+        const share =
+          totalGrossOwnerPoolPaise > 0
+            ? Math.floor(
+                (totalCollectedOwnerPoolPaise * ent.grossEntitlementPaise) /
+                  totalGrossOwnerPoolPaise
+              )
+            : Math.floor(totalCollectedOwnerPoolPaise / ownerList.length)
+        ent.cashEntitlementPaise = share
+        remainingPoolToDistribute -= share
+      }
+      ent.uncollectedEntitlementPaise = Math.max(
+        0,
+        ent.grossEntitlementPaise - ent.cashEntitlementPaise
+      )
+    }
+  }
+
   let totalOwnerEntitlementPaise = 0
+  let totalOwnerCashEntitlementPaise = 0
+  let totalOwnerUncollectedEntitlementPaise = 0
   let totalOwnerSettledPaise = 0
   let remainingOwnerSettlementPaise = 0
 
   for (const ent of Object.values(ownerEntitlements)) {
-    ent.remainingEntitlementPaise = Math.max(0, ent.grossEntitlementPaise - ent.settledPaise)
+    // Actionable remaining settlement in cash is based on cashEntitlementPaise minus settledPaise
+    ent.remainingEntitlementPaise = Math.max(0, ent.cashEntitlementPaise - ent.settledPaise)
     ent.netCashHeldPaise = ent.cashCollectedPaise - ent.expensesPaidPaise - ent.settlementsPaidPaise
-    // Net Position: positive = owed to partner; negative = partner holding excess table cash
+    // Net Position: positive = owed to partner; negative = partner holding excess cash to transfer
     ent.netPositionPaise = ent.remainingEntitlementPaise - ent.netCashHeldPaise
+
     totalOwnerEntitlementPaise += ent.grossEntitlementPaise
+    totalOwnerCashEntitlementPaise += ent.cashEntitlementPaise
+    totalOwnerUncollectedEntitlementPaise += ent.uncollectedEntitlementPaise
     totalOwnerSettledPaise += ent.settledPaise
     remainingOwnerSettlementPaise += ent.remainingEntitlementPaise
   }
@@ -677,6 +754,8 @@ export function calculateLedgerSummary(params: {
     ownerEntitlements,
     totalOwnerPoolPaise,
     totalOwnerEntitlementPaise,
+    totalOwnerCashEntitlementPaise,
+    totalOwnerUncollectedEntitlementPaise,
     totalOwnerSettledPaise,
     remainingOwnerSettlementPaise,
 

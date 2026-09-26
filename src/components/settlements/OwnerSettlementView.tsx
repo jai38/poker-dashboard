@@ -469,6 +469,11 @@ export const OwnerSettlementView: React.FC = () => {
                 <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/50">
                   <span className="text-[10px] text-slate-400 block font-sans">Pool Entitled</span>
                   <span className="font-mono text-slate-200 font-semibold">{formatINR(ent?.grossEntitlementPaise || 0)}</span>
+                  {summary.totalOutstandingPaise > 0 && (
+                    <span className="text-[9px] text-emerald-400 block font-sans mt-0.5">
+                      Cash: {formatINR(ent?.cashEntitlementPaise || 0)}
+                    </span>
+                  )}
                 </div>
                 <div className="bg-slate-950/60 p-2 rounded-lg border border-slate-800/50">
                   <span className="text-[10px] text-slate-400 block font-sans">Expenses Paid</span>
@@ -575,7 +580,12 @@ export const OwnerSettlementView: React.FC = () => {
                       {formatINR(netCashHeld)}
                     </td>
                     <td className="py-3.5 px-4 text-right text-slate-300">
-                      {formatINR(ent?.grossEntitlementPaise || 0)}
+                      <div>{formatINR(ent?.grossEntitlementPaise || 0)}</div>
+                      {summary.totalOutstandingPaise > 0 && (
+                        <div className="text-[10px] text-slate-400 font-sans mt-0.5">
+                          Cash: {formatINR(ent?.cashEntitlementPaise || 0)} · Due: {formatINR(ent?.uncollectedEntitlementPaise || 0)}
+                        </div>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-right font-medium text-emerald-400">
                       {formatINR(ent?.settledPaise || 0)}
