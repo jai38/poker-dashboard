@@ -272,7 +272,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             />
           </div>
           <p className="text-[11px] text-slate-400">
-            Money in the Festival Jar stays in the group kitty for parties/events and is not divided among personal pockets.
+            Money in the Festival Jar is marked as used for parties/events and is not in anyone's personal hand.
           </p>
         </div>
 
@@ -291,7 +291,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
 
             {festivalPaise > 0 && (
               <div className="flex justify-between items-center bg-purple-500/10 border border-purple-500/20 px-2.5 py-1.5 rounded-lg text-purple-300 font-mono text-xs">
-                <span>🎪 Festival Jar (Community):</span>
+                <span>🎪 Festival Jar (Used / Expended):</span>
                 <span className="font-bold">{formatINR(festivalPaise)}</span>
               </div>
             )}
@@ -309,7 +309,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                 <span className="text-emerald-400 font-mono font-bold">{formatINR(sharePerOwnerPaise)}</span>
                 {festivalPaise > 0 ? (
                   <span className="text-purple-300">
-                    {' '}(+ holds {formatINR(festivalPaise)} for Festival Jar)
+                    {' '}(−{formatINR(festivalPaise)} used in Festival Jar)
                   </span>
                 ) : null}
               </div>

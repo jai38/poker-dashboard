@@ -186,6 +186,7 @@ export interface LedgerSummary {
   festivalFundAccumulatedPaise: number
   festivalFundRemainingPaise: number
   isFestivalFundComplete: boolean
+  isFestivalFundMarkedUsed: boolean
 
   totalDistributableRakePaise: number
 
@@ -206,6 +207,7 @@ export interface LedgerSummary {
     settledPaise: number
     remainingEntitlementPaise: number
     cashCollectedPaise: number
+    festivalFundDepositedPaise?: number
     expensesPaidPaise: number
     settlementsPaidPaise: number
     netCashHeldPaise: number

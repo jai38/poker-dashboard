@@ -628,7 +628,13 @@ describe('Pure Accounting Engine Specification Tests', () => {
 
     // Cash held
     expect(summary.ownerEntitlements['o1'].cashCollectedPaise).toBe(40000 * 100)
+    expect(summary.ownerEntitlements['o1'].festivalFundDepositedPaise).toBe(8000 * 100)
+    expect(summary.ownerEntitlements['o1'].netCashHeldPaise).toBe(32000 * 100)
+
     expect(summary.ownerEntitlements['o2'].cashCollectedPaise).toBe(10000 * 100)
+    expect(summary.ownerEntitlements['o2'].festivalFundDepositedPaise).toBe(2000 * 100)
+    expect(summary.ownerEntitlements['o2'].netCashHeldPaise).toBe(8000 * 100)
+
     expect(summary.ownerEntitlements['o3'].cashCollectedPaise).toBe(0)
     expect(summary.ownerEntitlements['o3'].expensesPaidPaise).toBe(2000 * 100)
     expect(summary.ownerEntitlements['o3'].netCashHeldPaise).toBe(-2000 * 100)
@@ -638,22 +644,23 @@ describe('Pure Accounting Engine Specification Tests', () => {
     expect(summary.ownerEntitlements['o3'].netPositionPaise).toBe(11500 * 100)
     // o4: 9,500 entitlement = +9,500 owed to o4
     expect(summary.ownerEntitlements['o4'].netPositionPaise).toBe(9500 * 100)
-    // o1: 9,500 entitlement - 40,000 cash held = -30,500 (holds excess)
-    expect(summary.ownerEntitlements['o1'].netPositionPaise).toBe(-30500 * 100)
-    // o2: 9,500 entitlement - 10,000 cash held = -500 (holds excess)
-    expect(summary.ownerEntitlements['o2'].netPositionPaise).toBe(-500 * 100)
+    // o2: 9,500 entitlement - 8,000 cash held = +1,500 owed to o2
+    expect(summary.ownerEntitlements['o2'].netPositionPaise).toBe(1500 * 100)
+    // o1: 9,500 entitlement - 32,000 cash held = -22,500 (transfers ₹22,500 to square everyone)
+    expect(summary.ownerEntitlements['o1'].netPositionPaise).toBe(-22500 * 100)
 
-    // Recommended transfers satisfy creditors o3 (₹11,500) and o4 (₹9,500) = ₹21,000
+    // Recommended transfers satisfy creditors o2 (₹1,500), o3 (₹11,500), and o4 (₹9,500) = ₹22,500
     const totalTransferred = summary.recommendedTransfers.reduce((s, t) => s + t.amountPaise, 0)
-    expect(totalTransferred).toBe((11500 + 9500) * 100)
+    expect(totalTransferred).toBe((1500 + 11500 + 9500) * 100)
 
-    // After satisfying creditors, the remaining excess matches Festival Fund (₹10,000)
+    // Festival Fund is marked as used and CANNOT be in anyone's hand
     expect(summary.festivalFundAccumulatedPaise).toBe(10000 * 100)
+    expect(summary.isFestivalFundMarkedUsed).toBe(true)
     const totalReservesHeld = Object.values(summary.ownerEntitlements).reduce(
       (s, e) => s + e.tableReservesHeldPaise,
       0
     )
-    expect(totalReservesHeld).toBe(10000 * 100)
+    expect(totalReservesHeld).toBe(0)
   })
 
   // Test 24: P2P Settlement payout properly registers payer and recipient
@@ -964,6 +971,104 @@ describe('Pure Accounting Engine Specification Tests', () => {
     // Total transfers = ₹6,600. Tanna retains ₹10,000 - ₹6,600 = ₹3,400 (his ₹2,200 share + ₹1,200 bills reimbursed)
     const totalTransferred = summary.recommendedTransfers.reduce((sum, t) => sum + t.amountPaise, 0)
     expect(totalTransferred).toBe(6600 * 100)
+  })
+
+  // Test 28: Whatever is put into the festival jar is marked as used and cannot be in anyone's hand
+  it('Test 28: Whatever is put in festival jar is marked as used, deducted from cash custody, and cannot be in anyones hand', () => {
+    const historicalRake = [
+      {
+        id: 'h1',
+        playerId: 'p-anmol',
+        amountPaise: 12200 * 100, // ₹12,200 total rake
+        entryDate: '2026-09-02T10:00:00Z',
+        status: 'active' as const,
+      },
+    ]
+
+    // Anmol pays ₹10,000 to Tanna (o3)
+    const payments = [
+      {
+        id: 'pay-1',
+        playerId: 'p-anmol',
+        amountPaise: 10000 * 100,
+        paidAt: '2026-09-02T12:00:00Z',
+        status: 'active' as const,
+        receivedByOwnerId: 'o3', // Tanna
+      },
+    ]
+
+    // Tanna paid ₹1,200 bills
+    const expenses = [
+      {
+        id: 'exp-1',
+        type: 'monthly_expense' as const,
+        amountPaise: 1200 * 100,
+        description: 'bills',
+        expenseDate: '2026-09-02T15:00:00Z',
+        status: 'active' as const,
+        paidByOwnerId: 'o3',
+      },
+    ]
+
+    // ₹1,000 put into festival jar
+    const bucketTransfers = [
+      {
+        id: 'bt-1',
+        transferredAt: '2026-09-02T12:05:00Z',
+        fromBucket: 'table_recovery' as const,
+        toBucket: 'festival_fund' as const,
+        amountPaise: 1000 * 100,
+        status: 'active' as const,
+      },
+    ]
+
+    const summary = calculateLedgerSummary({
+      owners: mockOwnerDefs, // o1: Jai, o2: Kunal, o3: Tanna, o4: Sachin
+      games: [],
+      historicalRake,
+      payments,
+      expenses,
+      settlements: [],
+      bucketTransfers,
+    })
+
+    // Festival Fund is ₹1,000, marked as used
+    expect(summary.festivalFundAccumulatedPaise).toBe(1000 * 100)
+    expect(summary.isFestivalFundMarkedUsed).toBe(true)
+
+    // Tanna's cash custody: ₹10,000 collected - ₹1,000 (deposited into festival jar) - ₹1,200 (bills) = ₹7,800
+    expect(summary.ownerEntitlements['o3'].cashCollectedPaise).toBe(10000 * 100)
+    expect(summary.ownerEntitlements['o3'].festivalFundDepositedPaise).toBe(1000 * 100)
+    expect(summary.ownerEntitlements['o3'].expensesPaidPaise).toBe(1200 * 100)
+    expect(summary.ownerEntitlements['o3'].netCashHeldPaise).toBe(7800 * 100)
+
+    // Net cash to distribute after ₹1,000 festival jar and ₹1,200 bills: ₹10,000 - ₹1,000 - ₹1,200 = ₹7,800
+    // Split 4 ways = ₹1,950 each!
+    expect(summary.ownerEntitlements['o1'].cashEntitlementPaise).toBe(1950 * 100)
+    expect(summary.ownerEntitlements['o2'].cashEntitlementPaise).toBe(1950 * 100)
+    expect(summary.ownerEntitlements['o3'].cashEntitlementPaise).toBe(1950 * 100)
+    expect(summary.ownerEntitlements['o4'].cashEntitlementPaise).toBe(1950 * 100)
+
+    // Tanna owes each partner ₹1,950 (net position = -₹5,850)
+    expect(summary.ownerEntitlements['o3'].netPositionPaise).toBe(-5850 * 100)
+    expect(summary.ownerEntitlements['o1'].netPositionPaise).toBe(1950 * 100)
+    expect(summary.ownerEntitlements['o2'].netPositionPaise).toBe(1950 * 100)
+    expect(summary.ownerEntitlements['o4'].netPositionPaise).toBe(1950 * 100)
+
+    // Recommended transfers: Tanna pays ₹1,950 to Jai, Kunal, Sachin
+    const transferToO1 = summary.recommendedTransfers.find((t) => t.toOwnerId === 'o1')
+    const transferToO2 = summary.recommendedTransfers.find((t) => t.toOwnerId === 'o2')
+    const transferToO4 = summary.recommendedTransfers.find((t) => t.toOwnerId === 'o4')
+
+    expect(transferToO1?.amountPaise).toBe(1950 * 100)
+    expect(transferToO2?.amountPaise).toBe(1950 * 100)
+    expect(transferToO4?.amountPaise).toBe(1950 * 100)
+
+    // No partner holds festival reserves (cannot be in anyone's hand)
+    for (const ent of Object.values(summary.ownerEntitlements)) {
+      expect(ent.tableReservesHeldPaise).toBe(0)
+    }
+    expect(summary.totalTableReservesInCustodyPaise).toBe(0)
   })
 })
 

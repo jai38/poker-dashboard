@@ -339,6 +339,7 @@ export function calculateLedgerSummary(params: {
       settledPaise: 0,
       remainingEntitlementPaise: 0,
       cashCollectedPaise: 0,
+      festivalFundDepositedPaise: 0,
       expensesPaidPaise: 0,
       settlementsPaidPaise: 0,
       netCashHeldPaise: 0,
@@ -366,6 +367,7 @@ export function calculateLedgerSummary(params: {
           settledPaise: 0,
           remainingEntitlementPaise: 0,
           cashCollectedPaise: 0,
+          festivalFundDepositedPaise: 0,
           expensesPaidPaise: 0,
           settlementsPaidPaise: 0,
           netCashHeldPaise: 0,
@@ -499,6 +501,7 @@ export function calculateLedgerSummary(params: {
               settledPaise: 0,
               remainingEntitlementPaise: 0,
               cashCollectedPaise: 0,
+              festivalFundDepositedPaise: 0,
               expensesPaidPaise: 0,
               settlementsPaidPaise: 0,
               netCashHeldPaise: 0,
@@ -580,10 +583,36 @@ export function calculateLedgerSummary(params: {
       ent.uncollectedEntitlementPaise = 0
     }
   } else {
-    // Net cash collected after reimbursing out-of-pocket expenses
+    // 1. Portion of collected cash deposited into Festival Jar (Community kitty, marked as used)
+    const actualCollectedFestivalFundPaise = Math.min(
+      currentFestivalAccumulatedPaise,
+      totalRakeCollectedPaise
+    )
+
+    // Deduct festival fund cash from the custody of partners who collected cash (proportional to their collections)
+    let remainingFestivalCashToDeduct = actualCollectedFestivalFundPaise
+    const ownerList = Object.values(ownerEntitlements)
+    for (let i = 0; i < ownerList.length; i++) {
+      const ent = ownerList[i]
+      if (i === ownerList.length - 1) {
+        ent.festivalFundDepositedPaise = remainingFestivalCashToDeduct
+      } else {
+        const share =
+          totalRakeCollectedPaise > 0
+            ? Math.floor(
+                (actualCollectedFestivalFundPaise * ent.cashCollectedPaise) /
+                  totalRakeCollectedPaise
+              )
+            : 0
+        ent.festivalFundDepositedPaise = share
+        remainingFestivalCashToDeduct -= share
+      }
+    }
+
+    // Net cash collected after reimbursing out-of-pocket expenses and festival jar allocation
     const netCashAvailablePaise = Math.max(
       0,
-      totalRakeCollectedPaise - totalExpensesPaidByOwnersPaise
+      totalRakeCollectedPaise - totalExpensesPaidByOwnersPaise - actualCollectedFestivalFundPaise
     )
 
     // Waterfall on actual cash collected:
@@ -596,16 +625,8 @@ export function calculateLedgerSummary(params: {
       0,
       netCashAvailablePaise - settings.tableRecoveryTargetPaise
     )
-    // 2. Festival Fund (retained as community table reserve, not distributed to owners)
-    const collectedFestivalFundPaise = Math.min(
-      remainingCashAfterTable,
-      settings.festivalFundTargetPaise
-    )
-    // 3. Distributable Profit (distributed to owners)
-    const collectedProfitPaise = Math.max(
-      0,
-      remainingCashAfterTable - settings.festivalFundTargetPaise
-    )
+    // 2. Distributable Profit (distributed to owners)
+    const collectedProfitPaise = remainingCashAfterTable
 
     // Total cash collected that belongs to the organizers
     const totalCollectedOwnerPoolPaise = Math.min(
@@ -613,7 +634,6 @@ export function calculateLedgerSummary(params: {
       collectedTableRecoveryPaise + collectedProfitPaise
     )
 
-    const ownerList = Object.values(ownerEntitlements)
     let remainingPoolToDistribute = totalCollectedOwnerPoolPaise
 
     for (let i = 0; i < ownerList.length; i++) {
@@ -648,7 +668,11 @@ export function calculateLedgerSummary(params: {
   for (const ent of Object.values(ownerEntitlements)) {
     // Actionable remaining settlement in cash is based on cashEntitlementPaise minus settledPaise
     ent.remainingEntitlementPaise = Math.max(0, ent.cashEntitlementPaise - ent.settledPaise)
-    ent.netCashHeldPaise = ent.cashCollectedPaise - ent.expensesPaidPaise - ent.settlementsPaidPaise
+    ent.netCashHeldPaise =
+      ent.cashCollectedPaise -
+      (ent.festivalFundDepositedPaise || 0) -
+      ent.expensesPaidPaise -
+      ent.settlementsPaidPaise
     // Net Position: positive = owed to partner; negative = partner holding excess cash to transfer
     ent.netPositionPaise = ent.remainingEntitlementPaise - ent.netCashHeldPaise
 
@@ -701,17 +725,13 @@ export function calculateLedgerSummary(params: {
     if (debtor.balancePaise === 0) dIdx++
   }
 
-  // Any remaining excess held by debtors represents money held for Table Recovery / Festival Fund
-  for (const debtor of debtors) {
-    if (debtor.balancePaise > 0 && ownerEntitlements[debtor.ownerId]) {
-      ownerEntitlements[debtor.ownerId].tableReservesHeldPaise = debtor.balancePaise
-    }
+  // Festival Fund is marked as used and CANNOT be in anyone's hand.
+  for (const ent of Object.values(ownerEntitlements)) {
+    ent.tableReservesHeldPaise = 0
   }
 
   const totalTableReservesAccumulatedPaise = currentTableAccumulatedPaise + currentFestivalAccumulatedPaise
-  const totalTableReservesInCustodyPaise =
-    Object.values(ownerEntitlements).reduce((sum, ent) => sum + ent.tableReservesHeldPaise, 0) +
-    unassignedCashPaise
+  const totalTableReservesInCustodyPaise = 0
 
   // 7. Expenses summary
   const totalSessionExpensesPaise = activeGames.reduce(
@@ -752,6 +772,7 @@ export function calculateLedgerSummary(params: {
       settings.festivalFundTargetPaise - currentFestivalAccumulatedPaise
     ),
     isFestivalFundComplete: currentFestivalAccumulatedPaise >= settings.festivalFundTargetPaise,
+    isFestivalFundMarkedUsed: true,
 
     totalDistributableRakePaise,
 

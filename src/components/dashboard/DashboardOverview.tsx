@@ -156,11 +156,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
         {/* Festival Jar (Open Jar - No Target Bar) */}
         <StatCard
-          title="Festival Jar"
+          title="Festival Jar (Used)"
           amount={formatINR(summary.festivalFundAccumulatedPaise)}
-          subtitle="Open community kitty for festival parties & events"
+          subtitle="Marked as used for parties/events · Not in personal custody"
           badge={{
-            text: 'Community Kitty',
+            text: 'Used / Expended',
             variant: 'purple',
           }}
           icon={<Sparkles className="w-5 h-5" />}
@@ -324,18 +324,18 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           {/* Step 4: Festival Jar */}
           <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3.5 flex flex-col justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              4. Festival Jar
+              4. Festival Jar (Used)
             </span>
             <div className="my-2">
               <div className="text-lg font-bold text-purple-400">
                 {formatINR(summary.festivalFundAccumulatedPaise)}
               </div>
               <div className="text-[11px] text-slate-500">
-                Open Community Kitty
+                Community Kitty (Used)
               </div>
             </div>
             <div className="text-[10px] text-purple-400/80">
-              Kept for parties & events
+              Marked as used · Not in anyone's hand
             </div>
           </div>
 

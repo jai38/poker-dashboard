@@ -264,10 +264,18 @@ export const OwnerSettlementView: React.FC = () => {
           </div>
           <div className="col-span-2 sm:col-span-1">
             <span className="text-[10px] font-sans text-slate-400 uppercase tracking-wider block">
-              Event Fund (Festival Reserve)
+              Festival Jar (Used)
             </span>
-            <span className="text-sm sm:text-base font-bold text-amber-300">
-              {formatINR(summary.festivalFundAccumulatedPaise)}
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-sm sm:text-base font-bold text-amber-300">
+                {formatINR(summary.festivalFundAccumulatedPaise)}
+              </span>
+              <span className="text-[10px] text-purple-400 font-sans font-medium">
+                (Used)
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-500 font-sans block mt-0.5">
+              Expended · Not in personal custody
             </span>
           </div>
         </div>
@@ -278,7 +286,8 @@ export const OwnerSettlementView: React.FC = () => {
             const ent = summary.ownerEntitlements[owner.id]
             const cashCollected = ent?.cashCollectedPaise || 0
             const netCashHeld = ent?.netCashHeldPaise || 0
-            const reserveHeld = ent?.tableReservesHeldPaise || 0
+            const festivalDeposited = ent?.festivalFundDepositedPaise || 0
+            const expensesPaid = ent?.expensesPaidPaise || 0
 
             return (
               <div
@@ -321,10 +330,19 @@ export const OwnerSettlementView: React.FC = () => {
                       <span className="font-mono text-slate-300">{formatINR(cashCollected)}</span>
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
-                      <span>Reserve Custody:</span>
-                      <span className="font-mono text-amber-300/90">{formatINR(reserveHeld)}</span>
-                    </div>
+                    {festivalDeposited > 0 && (
+                      <div className="flex items-center justify-between text-[11px] text-purple-400">
+                        <span>Festival Jar (Used):</span>
+                        <span className="font-mono">-{formatINR(festivalDeposited)}</span>
+                      </div>
+                    )}
+
+                    {expensesPaid > 0 && (
+                      <div className="flex items-center justify-between text-[11px] text-rose-400">
+                        <span>Bills Reimbursed:</span>
+                        <span className="font-mono">-{formatINR(expensesPaid)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
