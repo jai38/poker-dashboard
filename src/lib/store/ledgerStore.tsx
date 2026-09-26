@@ -147,7 +147,14 @@ function safeSupabaseOp(fn: (client: SupabaseClient) => Promise<any> | any) {
     try {
       const res = fn(supabase)
       if (res && typeof res.then === 'function') {
-        res.then(undefined, (e: any) => console.warn('Supabase operation warning:', e))
+        res.then(
+          (result: any) => {
+            if (result && result.error) {
+              console.warn('Supabase operation error:', result.error)
+            }
+          },
+          (e: any) => console.warn('Supabase operation warning:', e)
+        )
       }
     } catch (e: any) {
       console.warn('Supabase operation exception:', e)
@@ -716,6 +723,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     let updatedPlayers = [...players]
     const newRakeEntries: HistoricalRakeEntry[] = []
     const newPayments: PlayerPayment[] = []
+    const newPlayersToInsert: Player[] = []
 
     if (data.playerRakes && data.playerRakes.length > 0) {
       data.playerRakes.forEach((pr, idx) => {
@@ -735,14 +743,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               createdAt: new Date().toISOString(),
             }
             updatedPlayers.push(newP)
+            newPlayersToInsert.push(newP)
             targetPlayerId = newP.id
-            safeSupabaseOp((client) =>
-              client.from('players').insert({
-                id: newP.id,
-                name: newP.name,
-                created_at: newP.createdAt,
-              })
-            )
           }
         }
 
@@ -793,8 +795,21 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       payments: updatedPayments,
     })
 
-    // Cloud DB write
+    // Cloud DB write - chain player creation first so foreign keys succeed
     safeSupabaseOp(async (client) => {
+      if (newPlayersToInsert.length > 0) {
+        for (const p of newPlayersToInsert) {
+          const { error } = await client.from('players').insert({
+            id: p.id,
+            name: p.name,
+            created_at: p.createdAt,
+          })
+          if (error && error.code !== '23505') {
+            console.warn('Player insert error in addGame:', error)
+          }
+        }
+      }
+
       await client.from('games').insert({
         id: newGame.id,
         game_number: newGame.gameNumber,
@@ -1012,6 +1027,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     let targetPlayerId = data.playerId
     let updatedPlayers = [...players]
 
+    let newPlayerToInsert: Player | null = null
+
     if (!targetPlayerId && data.playerName) {
       const existing = players.find(
         (p) => p.name.trim().toLowerCase() === data.playerName?.trim().toLowerCase()
@@ -1025,17 +1042,10 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           createdAt: new Date().toISOString(),
         }
         updatedPlayers.push(newPlayer)
+        newPlayerToInsert = newPlayer
         targetPlayerId = newPlayer.id
         setPlayers(updatedPlayers)
         persist({ players: updatedPlayers })
-
-        safeSupabaseOp((client) =>
-          client.from('players').insert({
-            id: newPlayer.id,
-            name: newPlayer.name,
-            created_at: newPlayer.createdAt,
-          })
-        )
 
         addAudit('PLAYER_CREATED', 'player', newPlayer.id, { name: newPlayer.name })
       }
@@ -1057,18 +1067,6 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const updatedHistorical = [...historicalRake, newRake]
     setHistoricalRake(updatedHistorical)
 
-    safeSupabaseOp((client) =>
-      client.from('rake_entries').insert({
-        id: newRake.id,
-        player_id: newRake.playerId,
-        amount_paise: newRake.amountPaise,
-        entry_type: 'historical',
-        entry_date: newRake.entryDate,
-        notes: newRake.notes,
-        status: 'active',
-      })
-    )
-
     let newPayment: PlayerPayment | undefined = undefined
     let updatedPayments = [...payments]
 
@@ -1084,25 +1082,52 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       updatedPayments.push(newPayment)
       setPayments(updatedPayments)
-
-      safeSupabaseOp(async (client) => {
-        const row = {
-          id: newPayment!.id,
-          player_id: newPayment!.playerId,
-          amount_paise: newPayment!.amountPaise,
-          paid_at: newPayment!.paidAt,
-          notes: newPayment!.notes,
-          status: 'active',
-          received_by_owner_id: data.receivedByOwnerId || null,
-        }
-        await insertPaymentResilient(client, row)
-      })
     }
 
     persist({
       players: updatedPlayers,
       historicalRake: updatedHistorical,
       payments: updatedPayments,
+    })
+
+    // Cloud DB write - chain player first, then rake entry, then payment
+    safeSupabaseOp(async (client) => {
+      if (newPlayerToInsert) {
+        const { error: pErr } = await client.from('players').insert({
+          id: newPlayerToInsert.id,
+          name: newPlayerToInsert.name,
+          created_at: newPlayerToInsert.createdAt,
+        })
+        if (pErr && pErr.code !== '23505') {
+          console.warn('Player insert error in addHistoricalRake:', pErr)
+        }
+      }
+
+      const { error: rErr } = await client.from('rake_entries').insert({
+        id: newRake.id,
+        player_id: newRake.playerId,
+        amount_paise: newRake.amountPaise,
+        entry_type: 'historical',
+        entry_date: newRake.entryDate,
+        notes: newRake.notes,
+        status: 'active',
+      })
+      if (rErr) {
+        console.warn('Rake entry insert error in addHistoricalRake:', rErr)
+      }
+
+      if (newPayment) {
+        const row = {
+          id: newPayment.id,
+          player_id: newPayment.playerId,
+          amount_paise: newPayment.amountPaise,
+          paid_at: newPayment.paidAt,
+          notes: newPayment.notes,
+          status: 'active',
+          received_by_owner_id: data.receivedByOwnerId || null,
+        }
+        await insertPaymentResilient(client, row)
+      }
     })
 
     addAudit('HISTORICAL_RAKE_ADDED', 'historical_rake', newRake.id, {
