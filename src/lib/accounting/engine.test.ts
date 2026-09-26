@@ -885,6 +885,86 @@ describe('Pure Accounting Engine Specification Tests', () => {
     expect(totalTransferred).toBe(7500 * 100)
     expect(summary.reconciled).toBe(true)
   })
+
+  // Test 27: Host expense is shared equally by all 4 owners, not absorbed by just one owner
+  it('Test 27: When Tanna pays ₹1,200 expense and collects ₹10,000, all 4 owners share the expense equally (₹300 each), leaving ₹2,200 cash each', () => {
+    const historicalRake = [
+      {
+        id: 'hist-anmol',
+        playerId: 'player-anmol',
+        amountPaise: 12200 * 100, // ₹12,200
+        entryDate: '2026-09-01T20:00:00Z',
+        status: 'active' as const,
+      },
+    ]
+
+    const payments = [
+      {
+        id: 'pay-1',
+        playerId: 'player-anmol',
+        amountPaise: 1000 * 100, // ₹1,000
+        paidAt: '2026-09-02T10:00:00Z',
+        status: 'active' as const,
+        receivedByOwnerId: 'o3', // Tanna
+      },
+      {
+        id: 'pay-2',
+        playerId: 'player-anmol',
+        amountPaise: 9000 * 100, // ₹9,000
+        paidAt: '2026-09-02T12:00:00Z',
+        status: 'active' as const,
+        receivedByOwnerId: 'o3', // Tanna
+      },
+    ]
+
+    // Tanna paid ₹1,200 for bills
+    const expenses = [
+      {
+        id: 'exp-1',
+        type: 'monthly_expense' as const,
+        amountPaise: 1200 * 100,
+        description: 'bills',
+        expenseDate: '2026-09-02T15:00:00Z',
+        status: 'active' as const,
+        paidByOwnerId: 'o3', // Tanna
+      },
+    ]
+
+    const summary = calculateLedgerSummary({
+      owners: mockOwnerDefs, // o1: Jai, o2: Kunal, o3: Tanna, o4: Sachin
+      games: [],
+      historicalRake,
+      payments,
+      expenses,
+      settlements: [],
+    })
+
+    // Net cash to distribute after reimbursing Tanna for ₹1,200 is ₹10,000 - ₹1,200 = ₹8,800
+    // Split 4 ways = ₹2,200 each!
+    expect(summary.ownerEntitlements['o1'].cashEntitlementPaise).toBe(2200 * 100)
+    expect(summary.ownerEntitlements['o2'].cashEntitlementPaise).toBe(2200 * 100)
+    expect(summary.ownerEntitlements['o3'].cashEntitlementPaise).toBe(2200 * 100)
+    expect(summary.ownerEntitlements['o4'].cashEntitlementPaise).toBe(2200 * 100)
+
+    // Tanna's net position: owes ₹2,200 to each of the 3 other partners = -₹6,600
+    expect(summary.ownerEntitlements['o3'].netPositionPaise).toBe(-6600 * 100)
+    expect(summary.ownerEntitlements['o1'].netPositionPaise).toBe(2200 * 100)
+    expect(summary.ownerEntitlements['o2'].netPositionPaise).toBe(2200 * 100)
+    expect(summary.ownerEntitlements['o4'].netPositionPaise).toBe(2200 * 100)
+
+    // Tanna sends exactly ₹2,200 to each partner
+    const transferToO1 = summary.recommendedTransfers.find((t) => t.toOwnerId === 'o1')
+    const transferToO2 = summary.recommendedTransfers.find((t) => t.toOwnerId === 'o2')
+    const transferToO4 = summary.recommendedTransfers.find((t) => t.toOwnerId === 'o4')
+
+    expect(transferToO1?.amountPaise).toBe(2200 * 100) // ₹2,200 to Jai
+    expect(transferToO2?.amountPaise).toBe(2200 * 100) // ₹2,200 to Kunal
+    expect(transferToO4?.amountPaise).toBe(2200 * 100) // ₹2,200 to Sachin (equal!)
+
+    // Total transfers = ₹6,600. Tanna retains ₹10,000 - ₹6,600 = ₹3,400 (his ₹2,200 share + ₹1,200 bills reimbursed)
+    const totalTransferred = summary.recommendedTransfers.reduce((sum, t) => sum + t.amountPaise, 0)
+    expect(totalTransferred).toBe(6600 * 100)
+  })
 })
 
 
