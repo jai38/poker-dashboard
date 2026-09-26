@@ -72,10 +72,10 @@ export const OwnerSettlementView: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
             <Scale className="w-5 h-5 text-indigo-400" />
-            <span>Organizer Settlements, Cash Custody & Entitlements</span>
+            <span>Who Owes Whom & Organizer Settlements</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Tracks physical cash collected in organizer accounts vs. pool entitlements, out-of-pocket expenses, and actionable peer-to-peer transfers.
+            Simple view of who collected cash, who paid expenses, and exact peer-to-peer transfers needed so all 4 organizers are 100% square.
           </p>
         </div>
 
@@ -123,11 +123,11 @@ export const OwnerSettlementView: React.FC = () => {
           <div>
             <h4 className="text-sm font-semibold">
               {summary.reconciled
-                ? 'Exact Reconciliation: Distributable Pool === Organizer Entitlements'
+                ? 'Exact Reconciliation: Total Organizer Pool === Sum of Organizer Entitlements'
                 : 'Reconciliation Mismatch'}
             </h4>
             <p className="text-xs text-slate-300 mt-0.5">
-              Total Distributable Pool ({formatINR(summary.totalDistributableRakePaise)}) = Total Organizer Entitlements ({formatINR(summary.totalOwnerEntitlementPaise)}). Diff: {formatINR(summary.reconciliationDiffPaise)}.
+              Total Organizer Pool ({formatINR(summary.totalOwnerPoolPaise)}) = Total Organizer Entitlements ({formatINR(summary.totalOwnerEntitlementPaise)}). Diff: {formatINR(summary.reconciliationDiffPaise)}.
             </p>
           </div>
         </div>

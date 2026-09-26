@@ -59,8 +59,8 @@ export function allocateRakeToBuckets(
   availableNetRakePaise: number,
   accumulatedTablePaise: number,
   tableTargetPaise: number,
-  accumulatedFestivalPaise: number,
-  festivalTargetPaise: number
+  accumulatedFestivalPaise: number = 0,
+  festivalTargetPaise: number = 0
 ): {
   allocatedToTablePaise: number
   allocatedToFestivalPaise: number
@@ -72,12 +72,10 @@ export function allocateRakeToBuckets(
 
   const tableRemaining = Math.max(0, tableTargetPaise - accumulatedTablePaise)
   const allocatedToTablePaise = Math.min(availableNetRakePaise, tableRemaining)
-
   const afterTable = availableNetRakePaise - allocatedToTablePaise
 
-  const festivalRemaining = Math.max(0, festivalTargetPaise - accumulatedFestivalPaise)
+  const festivalRemaining = festivalTargetPaise > 0 ? Math.max(0, festivalTargetPaise - accumulatedFestivalPaise) : 0
   const allocatedToFestivalPaise = Math.min(afterTable, festivalRemaining)
-
   const distributableRakePaise = afterTable - allocatedToFestivalPaise
 
   return {
@@ -347,11 +345,53 @@ export function calculateLedgerSummary(params: {
     }
   }
 
+  function creditOwnersEqually(amountPaise: number) {
+    if (amountPaise <= 0 || activeOwners.length === 0) return
+    const count = activeOwners.length
+    const base = Math.floor(amountPaise / count)
+    let rem = amountPaise % count
+    for (const o of activeOwners) {
+      const share = base + (rem > 0 ? 1 : 0)
+      if (rem > 0) rem--
+      if (!ownerEntitlements[o.id]) {
+        ownerEntitlements[o.id] = {
+          ownerId: o.id,
+          equalSharePaise: 0,
+          excessSharePaise: 0,
+          grossEntitlementPaise: 0,
+          settledPaise: 0,
+          remainingEntitlementPaise: 0,
+          cashCollectedPaise: 0,
+          expensesPaidPaise: 0,
+          settlementsPaidPaise: 0,
+          netCashHeldPaise: 0,
+          netPositionPaise: 0,
+          tableReservesHeldPaise: 0,
+        }
+      }
+      ownerEntitlements[o.id].equalSharePaise += share
+      ownerEntitlements[o.id].grossEntitlementPaise += share
+    }
+  }
+
+  function debitOwnersEqually(amountPaise: number) {
+    if (amountPaise <= 0 || activeOwners.length === 0) return
+    const count = activeOwners.length
+    const base = Math.floor(amountPaise / count)
+    let rem = amountPaise % count
+    for (const o of activeOwners) {
+      const share = base + (rem > 0 ? 1 : 0)
+      if (rem > 0) rem--
+      if (ownerEntitlements[o.id]) {
+        ownerEntitlements[o.id].equalSharePaise = Math.max(0, ownerEntitlements[o.id].equalSharePaise - share)
+        ownerEntitlements[o.id].grossEntitlementPaise = Math.max(0, ownerEntitlements[o.id].grossEntitlementPaise - share)
+      }
+    }
+  }
+
   for (const item of timeline) {
     if (item.type === 'historical') {
-      // Historical rake contributes to Table Recovery & Festival Fund,
-      // but DOES NOT generate owner profit distributions (no invented attendance).
-      const { allocatedToTablePaise, allocatedToFestivalPaise } = allocateRakeToBuckets(
+      const { allocatedToTablePaise, allocatedToFestivalPaise, distributableRakePaise } = allocateRakeToBuckets(
         item.entry.amountPaise,
         currentTableAccumulatedPaise,
         settings.tableRecoveryTargetPaise,
@@ -361,7 +401,10 @@ export function calculateLedgerSummary(params: {
 
       currentTableAccumulatedPaise += allocatedToTablePaise
       currentFestivalAccumulatedPaise += allocatedToFestivalPaise
-      // Any remaining historical rake beyond table and festival fund is unassigned
+      totalDistributableRakePaise += distributableRakePaise
+
+      // Both Table Recovery and Profit reimburse the 4 owners equally
+      creditOwnersEqually(allocatedToTablePaise + distributableRakePaise)
     } else if (item.type === 'transfer') {
       // Reallocate amount between buckets
       const transfer = item.entry
@@ -370,6 +413,7 @@ export function calculateLedgerSummary(params: {
       // Deduct from source bucket
       if (transfer.fromBucket === 'table_recovery') {
         currentTableAccumulatedPaise = Math.max(0, currentTableAccumulatedPaise - amt)
+        debitOwnersEqually(amt)
       } else if (transfer.fromBucket === 'festival_fund') {
         currentFestivalAccumulatedPaise = Math.max(0, currentFestivalAccumulatedPaise - amt)
       }
@@ -377,38 +421,12 @@ export function calculateLedgerSummary(params: {
       // Add to destination bucket
       if (transfer.toBucket === 'table_recovery') {
         currentTableAccumulatedPaise += amt
+        creditOwnersEqually(amt)
       } else if (transfer.toBucket === 'festival_fund') {
         currentFestivalAccumulatedPaise += amt
       } else if (transfer.toBucket === 'owner_profit') {
         totalDistributableRakePaise += amt
-        // Distribute transferred profit equally among all active table owners
-        const count = activeOwners.length
-        if (count > 0) {
-          const base = Math.floor(amt / count)
-          let rem = amt % count
-          for (const o of activeOwners) {
-            const share = base + (rem > 0 ? 1 : 0)
-            if (rem > 0) rem--
-            if (!ownerEntitlements[o.id]) {
-              ownerEntitlements[o.id] = {
-                ownerId: o.id,
-                equalSharePaise: 0,
-                excessSharePaise: 0,
-                grossEntitlementPaise: 0,
-                settledPaise: 0,
-                remainingEntitlementPaise: 0,
-                cashCollectedPaise: 0,
-                expensesPaidPaise: 0,
-                settlementsPaidPaise: 0,
-                netCashHeldPaise: 0,
-                netPositionPaise: 0,
-                tableReservesHeldPaise: 0,
-              }
-            }
-            ownerEntitlements[o.id].equalSharePaise += share
-            ownerEntitlements[o.id].grossEntitlementPaise += share
-          }
-        }
+        creditOwnersEqually(amt)
       }
     } else {
       // Game entry
@@ -423,18 +441,15 @@ export function calculateLedgerSummary(params: {
       let distributableRakePaise: number
 
       if (game.customAllocation) {
-        // User explicitly specified how much goes to where
         allocatedToTablePaise = Math.max(0, game.customAllocation.tableRecoveryPaise || 0)
         allocatedToFestivalPaise = Math.max(0, game.customAllocation.festivalFundPaise || 0)
         distributableRakePaise = Math.max(0, game.customAllocation.distributableProfitPaise || 0)
 
-        // Validate sum matches net rake; adjust profit if rounding or mismatch
         const customSum = allocatedToTablePaise + allocatedToFestivalPaise + distributableRakePaise
         if (customSum !== netRakePaise) {
           distributableRakePaise = Math.max(0, netRakePaise - (allocatedToTablePaise + allocatedToFestivalPaise))
         }
       } else {
-        // Default standard automatic waterfall
         const alloc = allocateRakeToBuckets(
           netRakePaise,
           currentTableAccumulatedPaise,
@@ -450,6 +465,9 @@ export function calculateLedgerSummary(params: {
       currentTableAccumulatedPaise += allocatedToTablePaise
       currentFestivalAccumulatedPaise += allocatedToFestivalPaise
       totalDistributableRakePaise += distributableRakePaise
+
+      // Credit Table Recovery equally to all owners
+      creditOwnersEqually(allocatedToTablePaise)
 
       let distributions: Record<string, number> = {}
       let equalShare: Record<string, number> = {}
@@ -624,7 +642,8 @@ export function calculateLedgerSummary(params: {
   const netGeneralAdjustmentPaise = totalGeneralExpensesPaise - totalCreditsAdjustmentsPaise
 
   // 8. Verification / Reconciliation
-  const reconciliationDiffPaise = totalDistributableRakePaise - totalOwnerEntitlementPaise
+  const totalOwnerPoolPaise = currentTableAccumulatedPaise + totalDistributableRakePaise
+  const reconciliationDiffPaise = totalOwnerPoolPaise - totalOwnerEntitlementPaise
   const reconciled = reconciliationDiffPaise === 0
 
   return {
@@ -656,6 +675,7 @@ export function calculateLedgerSummary(params: {
     netGeneralAdjustmentPaise,
 
     ownerEntitlements,
+    totalOwnerPoolPaise,
     totalOwnerEntitlementPaise,
     totalOwnerSettledPaise,
     remainingOwnerSettlementPaise,

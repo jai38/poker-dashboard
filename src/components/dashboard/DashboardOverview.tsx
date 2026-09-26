@@ -16,6 +16,7 @@ import { useLedger } from '../../lib/store/ledgerStore'
 import { formatINR, formatDate } from '../../lib/accounting/formatters'
 import { StatCard } from '../common/StatCard'
 import { AddBucketTransferModal } from '../settlements/AddBucketTransferModal'
+import { RecordSettlementModal } from '../settlements/RecordSettlementModal'
 
 interface DashboardOverviewProps {
   onNavigateToGames: () => void
@@ -34,15 +35,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 }) => {
   const { summary, owners, games, historicalRake } = useLedger()
   const [isTransferOpen, setIsTransferOpen] = useState(false)
+  const [settlementTarget, setSettlementTarget] = useState<{
+    isOpen: boolean
+    ownerId?: string
+    payerId?: string
+    amountPaise?: number
+  }>({ isOpen: false })
 
   const tablePercent = Math.min(
     100,
     Math.round((summary.tableRecoveryAccumulatedPaise / summary.tableRecoveryTargetPaise) * 100)
-  )
-
-  const festivalPercent = Math.min(
-    100,
-    Math.round((summary.festivalFundAccumulatedPaise / summary.festivalFundTargetPaise) * 100)
   )
 
   return (
@@ -73,7 +75,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Distributable balance matches sum of organizer entitlements exactly (Diff: {formatINR(summary.reconciliationDiffPaise)}).
+              Every rupee accounted for: Table Reimbursement + Profit + Festival Jar = Total Fees (Diff: {formatINR(summary.reconciliationDiffPaise)}).
             </p>
           </div>
         </div>
@@ -103,7 +105,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
       {/* Primary Financial Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Total Fees Generated */}
+        {/* Total Rake Generated */}
         <StatCard
           title="Total Fees Generated"
           amount={formatINR(summary.totalRakeGeneratedPaise)}
@@ -121,9 +123,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           icon={<Wallet className="w-5 h-5" />}
         />
 
-        {/* Outstanding Dues */}
+        {/* Pending from Players */}
         <StatCard
-          title="Outstanding Dues"
+          title="Pending from Players"
           amount={formatINR(summary.totalOutstandingPaise)}
           subtitle="Pending contributions across all active members"
           badge={{
@@ -133,55 +135,125 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           icon={<Clock className="w-5 h-5" />}
         />
 
-        {/* Equipment Reserve */}
+        {/* Table Recovery */}
         <StatCard
-          title="Equipment Reserve"
+          title="Table Recovery"
           amount={`${formatINR(summary.tableRecoveryAccumulatedPaise)} / ${formatINR(
             summary.tableRecoveryTargetPaise
           )}`}
-          subtitle={`Remaining: ${formatINR(summary.tableRecoveryRemainingPaise)}`}
+          subtitle={`Remaining to reimburse 4 organizers: ${formatINR(summary.tableRecoveryRemainingPaise)}`}
           badge={{
-            text: summary.isTableRecoveryComplete ? 'Target Reached' : 'In Progress',
+            text: summary.isTableRecoveryComplete ? '100% Recovered' : `${tablePercent}% Recovered`,
             variant: summary.isTableRecoveryComplete ? 'emerald' : 'amber',
           }}
           progress={{
             current: summary.tableRecoveryAccumulatedPaise,
             target: summary.tableRecoveryTargetPaise,
-            label: 'Equipment Cost Recovered',
+            label: 'Table Cost Reimbursed to 4 Owners',
           }}
           icon={<ShieldCheck className="w-5 h-5" />}
         />
 
-        {/* Event Fund */}
+        {/* Festival Jar (Open Jar - No Target Bar) */}
         <StatCard
-          title="Event Fund"
-          amount={`${formatINR(summary.festivalFundAccumulatedPaise)} / ${formatINR(
-            summary.festivalFundTargetPaise
-          )}`}
-          subtitle={`Remaining: ${formatINR(summary.festivalFundRemainingPaise)}`}
+          title="Festival Jar"
+          amount={formatINR(summary.festivalFundAccumulatedPaise)}
+          subtitle="Open community kitty for festival parties & events"
           badge={{
-            text: summary.isFestivalFundComplete ? 'Target Reached' : 'Reserved',
-            variant: summary.isFestivalFundComplete ? 'emerald' : 'purple',
-          }}
-          progress={{
-            current: summary.festivalFundAccumulatedPaise,
-            target: summary.festivalFundTargetPaise,
-            label: 'Event Target Reserve',
+            text: 'Community Kitty',
+            variant: 'purple',
           }}
           icon={<Sparkles className="w-5 h-5" />}
         />
 
-        {/* Distributable Balance */}
+        {/* Total Profit */}
         <StatCard
-          title="Distributable Balance"
+          title="Total Profit"
           amount={formatINR(summary.totalDistributableRakePaise)}
-          subtitle="Net balance available after reserve & event targets are met"
+          subtitle={
+            summary.totalDistributableRakePaise > 0
+              ? 'Split equally 4 ways (25% each)'
+              : 'Activates after ₹65,000 table is 100% reimbursed'
+          }
           badge={{
-            text: summary.totalDistributableRakePaise > 0 ? 'Available for Distribution' : 'Reserve Funding First',
+            text: summary.totalDistributableRakePaise > 0 ? 'Ready to Distribute' : 'After Table Recovery',
             variant: summary.totalDistributableRakePaise > 0 ? 'emerald' : 'slate',
           }}
           icon={<TrendingUp className="w-5 h-5" />}
         />
+      </div>
+
+      {/* Who Owes Whom Card */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
+              <ArrowRightLeft className="w-4 h-4 text-emerald-400" />
+              <span>Who Owes Whom</span>
+              {summary.recommendedTransfers.length > 0 && (
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  {summary.recommendedTransfers.length} Pending
+                </span>
+              )}
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Direct peer-to-peer transfers needed so all 4 organizers are 100% square.
+            </p>
+          </div>
+          <button
+            onClick={onNavigateToSettlements}
+            className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1 shrink-0"
+          >
+            <span>Settlement History</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {summary.recommendedTransfers.length === 0 ? (
+          <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div className="text-xs text-emerald-300">
+              <span className="font-semibold">All Organizers are Square!</span> Everyone is settled up, no pending transfers.
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {summary.recommendedTransfers.map((t, idx) => {
+              const fromOwner = owners.find((o) => o.id === t.fromOwnerId)
+              const toOwner = owners.find((o) => o.id === t.toOwnerId)
+              return (
+                <div
+                  key={`${t.fromOwnerId}-${t.toOwnerId}-${idx}`}
+                  className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center justify-between gap-3 hover:border-slate-700 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs text-slate-300 flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-amber-300">{fromOwner?.name || 'Organizer'}</span>
+                      <span className="text-slate-500">owes</span>
+                      <span className="font-bold text-emerald-300">{toOwner?.name || 'Organizer'}</span>
+                    </div>
+                    <div className="text-base font-bold font-mono text-slate-100 mt-1">
+                      {formatINR(t.amountPaise)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() =>
+                      setSettlementTarget({
+                        isOpen: true,
+                        ownerId: t.toOwnerId,
+                        payerId: t.fromOwnerId,
+                        amountPaise: t.amountPaise,
+                      })
+                    }
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shrink-0 shadow-sm"
+                  >
+                    1-Tap Settle
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Visual Money Waterfall */}
@@ -189,10 +261,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
           <div>
             <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
-              <span>Financial Waterfall & Pipeline</span>
+              <span>How Every Rupee Flows</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Chronological flow from gross session fees through session expenses, recovery targets, and organizer shares
+              Simple 5-step flow from total fees to each organizer's pocket
             </p>
           </div>
           <span className="text-xs font-mono text-slate-400 bg-slate-950 px-2.5 py-1 rounded-md border border-slate-800">
@@ -204,7 +276,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           {/* Step 1: Gross Fees */}
           <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3.5 flex flex-col justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              1. Gross Fees
+              1. Total Fees
             </span>
             <div className="my-2">
               <div className="text-lg font-bold text-slate-100">
@@ -220,21 +292,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           {/* Step 2: Session Expenses */}
           <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3.5 flex flex-col justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              2. Session Expenses
+              2. Host Expenses
             </span>
             <div className="my-2">
               <div className="text-lg font-bold text-rose-400">
                 - {formatINR(summary.totalSessionExpensesPaise)}
               </div>
-              <div className="text-[11px] text-slate-500">Deducted at session level</div>
+              <div className="text-[11px] text-slate-500">Reimbursed to host</div>
             </div>
-            <div className="text-[10px] text-rose-400/80">Expenses cannot make net &lt; 0</div>
+            <div className="text-[10px] text-rose-400/80">Expenses deducted first</div>
           </div>
 
-          {/* Step 3: Equipment Reserve */}
+          {/* Step 3: Table Recovery */}
           <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3.5 flex flex-col justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              3. Equipment Reserve
+              3. Table Recovery
             </span>
             <div className="my-2">
               <div className="text-lg font-bold text-amber-400">
@@ -245,45 +317,45 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               </div>
             </div>
             <div className="text-[10px] text-amber-400/80">
-              {summary.isTableRecoveryComplete ? '✓ 100% Recovered' : `${tablePercent}% complete`}
+              {summary.isTableRecoveryComplete ? '✓ 100% Recovered' : `${tablePercent}% complete (25% each)`}
             </div>
           </div>
 
-          {/* Step 4: Event Fund */}
+          {/* Step 4: Festival Jar */}
           <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3.5 flex flex-col justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              4. Event Fund
+              4. Festival Jar
             </span>
             <div className="my-2">
               <div className="text-lg font-bold text-purple-400">
                 {formatINR(summary.festivalFundAccumulatedPaise)}
               </div>
               <div className="text-[11px] text-slate-500">
-                Target: {formatINR(summary.festivalFundTargetPaise)}
+                Open Community Kitty
               </div>
             </div>
             <div className="text-[10px] text-purple-400/80">
-              {summary.isFestivalFundComplete ? '✓ 100% Reserved' : `${festivalPercent}% complete`}
+              Kept for parties & events
             </div>
           </div>
 
-          {/* Step 5: Distributable */}
+          {/* Step 5: Profit */}
           <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3.5 flex flex-col justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              5. Distributable
+              5. Total Profit
             </span>
             <div className="my-2">
               <div className="text-lg font-bold text-emerald-400">
                 {formatINR(summary.totalDistributableRakePaise)}
               </div>
-              <div className="text-[11px] text-slate-500">4 Organizers Attendance</div>
+              <div className="text-[11px] text-slate-500">Above ₹65,000 Table</div>
             </div>
-            <div className="text-[10px] text-emerald-400/80">₹1,000 equal + 10% absent</div>
+            <div className="text-[10px] text-emerald-400/80">Split 4 ways equally</div>
           </div>
         </div>
       </div>
 
-      {/* Two Column Layout: Organizer Entitlements & Recent Sessions */}
+      {/* Two Column Layout: Organizer Balances & Recent Sessions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Organizer Entitlement Table */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col justify-between">
@@ -292,10 +364,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <div>
                 <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
                   <Users className="w-4 h-4 text-indigo-400" />
-                  <span>Organizer Entitlements</span>
+                  <span>Organizer Balances & Shares</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Calculated from distributable sessions using attendance distribution
+                  25% of table recovery reimbursement + 25% of profit
                 </p>
               </div>
               <button
@@ -313,24 +385,26 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 <thead>
                   <tr className="border-b border-slate-800 text-slate-400 text-xs font-medium">
                     <th className="py-2.5">Organizer</th>
-                    <th className="py-2.5 text-right">Equal Share</th>
-                    <th className="py-2.5 text-right">Excess Share</th>
-                    <th className="py-2.5 text-right">Total Entitlement</th>
+                    <th className="py-2.5 text-right">Table Share</th>
+                    <th className="py-2.5 text-right">Profit Share</th>
+                    <th className="py-2.5 text-right">Total Earned</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 font-mono text-xs">
                   {owners.map((owner) => {
                     const ent = summary.ownerEntitlements[owner.id]
+                    const tableShare = Math.floor(summary.tableRecoveryAccumulatedPaise / 4)
+                    const profitShare = (ent?.equalSharePaise || 0) + (ent?.excessSharePaise || 0)
                     return (
                       <tr key={owner.id} className="hover:bg-slate-800/30">
                         <td className="py-3 font-sans font-medium text-slate-200">{owner.name}</td>
-                        <td className="py-3 text-right text-slate-400">
-                          {formatINR(ent?.equalSharePaise || 0)}
+                        <td className="py-3 text-right text-amber-400">
+                          {formatINR(tableShare)}
                         </td>
                         <td className="py-3 text-right text-slate-400">
-                          {formatINR(ent?.excessSharePaise || 0)}
+                          {formatINR(profitShare)}
                         </td>
-                        <td className="py-3 text-right font-bold text-slate-100">
+                        <td className="py-3 text-right font-bold text-emerald-400">
                           {formatINR(ent?.grossEntitlementPaise || 0)}
                         </td>
                       </tr>
@@ -340,21 +414,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 <tfoot>
                   <tr className="border-t border-slate-800 font-bold text-xs">
                     <td className="py-3 font-sans text-slate-300">Total</td>
-                    <td className="py-3 text-right font-mono text-slate-300">
-                      {formatINR(
-                        Object.values(summary.ownerEntitlements).reduce(
-                          (s, e) => s + e.equalSharePaise,
-                          0
-                        )
-                      )}
+                    <td className="py-3 text-right font-mono text-amber-400">
+                      {formatINR(summary.tableRecoveryAccumulatedPaise)}
                     </td>
                     <td className="py-3 text-right font-mono text-slate-300">
-                      {formatINR(
-                        Object.values(summary.ownerEntitlements).reduce(
-                          (s, e) => s + e.excessSharePaise,
-                          0
-                        )
-                      )}
+                      {formatINR(summary.totalDistributableRakePaise)}
                     </td>
                     <td className="py-3 text-right font-mono text-emerald-400">
                       {formatINR(summary.totalOwnerEntitlementPaise)}
@@ -369,6 +433,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               {owners.map((owner) => {
                 const ent = summary.ownerEntitlements[owner.id]
                 const gross = ent?.grossEntitlementPaise || 0
+                const tableShare = Math.floor(summary.tableRecoveryAccumulatedPaise / 4)
+                const profitShare = (ent?.equalSharePaise || 0) + (ent?.excessSharePaise || 0)
                 return (
                   <div
                     key={owner.id}
@@ -377,23 +443,23 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     <div>
                       <div className="font-semibold text-slate-200 text-sm">{owner.name}</div>
                       <div className="text-[11px] text-slate-400 mt-0.5 space-x-1.5 font-mono">
-                        <span>Eq: {formatINR(ent?.equalSharePaise || 0)}</span>
+                        <span className="text-amber-400">Table: {formatINR(tableShare)}</span>
                         <span>·</span>
-                        <span>Ex: {formatINR(ent?.excessSharePaise || 0)}</span>
+                        <span>Profit: {formatINR(profitShare)}</span>
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold font-mono text-emerald-400">
                         {formatINR(gross)}
                       </div>
-                      <span className="text-[10px] text-slate-400">Total Entitled</span>
+                      <span className="text-[10px] text-slate-400">Total Share</span>
                     </div>
                   </div>
                 )
               })}
 
               <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs font-bold px-1">
-                <span className="text-slate-400">Total Entitlement:</span>
+                <span className="text-slate-400">Total Organizer Pool:</span>
                 <span className="text-emerald-400 font-mono text-sm">
                   {formatINR(summary.totalOwnerEntitlementPaise)}
                 </span>
@@ -401,11 +467,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
           </div>
 
-          {summary.totalDistributableRakePaise === 0 && (
+          {summary.tableRecoveryRemainingPaise > 0 && (
             <div className="mt-4 p-3 bg-slate-950/60 border border-slate-800/80 rounded-lg text-xs text-slate-400 flex items-center gap-2">
               <span className="text-amber-400 font-bold">ℹ</span>
               <span>
-                Distribution activates once Equipment Reserve ({formatINR(summary.tableRecoveryTargetPaise)}) and Event Fund ({formatINR(summary.festivalFundTargetPaise)}) targets are fulfilled.
+                Table recovery is reimbursing all 4 organizers ({formatINR(summary.tableRecoveryAccumulatedPaise)} of {formatINR(summary.tableRecoveryTargetPaise)} recovered). Full profit distribution activates once the table is 100% reimbursed.
               </span>
             </div>
           )}
@@ -499,6 +565,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         <AddBucketTransferModal
           isOpen={isTransferOpen}
           onClose={() => setIsTransferOpen(false)}
+        />
+      )}
+
+      {settlementTarget.isOpen && (
+        <RecordSettlementModal
+          isOpen={settlementTarget.isOpen}
+          onClose={() => setSettlementTarget({ isOpen: false })}
+          initialOwnerId={settlementTarget.ownerId}
+          initialPayerId={settlementTarget.payerId}
+          initialAmountPaise={settlementTarget.amountPaise}
         />
       )}
     </div>

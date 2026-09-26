@@ -15,17 +15,19 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   onClose,
   initialPlayerId,
 }) => {
-  const { players, historicalRake, payments, addPayment, owners } = useLedger()
+  const { players, historicalRake, payments, addPayment, owners, addBucketTransfer } = useLedger()
 
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(initialPlayerId || '')
   const [receivedByOwnerId, setReceivedByOwnerId] = useState<string>(owners[0]?.id || '')
   const [amountRupees, setAmountRupees] = useState<string>('')
+  const [festivalRupees, setFestivalRupees] = useState<string>('')
   const [paidAt, setPaidAt] = useState<string>(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState<string>('')
   const [error, setError] = useState<string>('')
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   const selectedPlayer = players.find((p) => p.id === selectedPlayerId)
+  const collector = owners.find((o) => o.id === receivedByOwnerId) || owners[0]
 
   // Compute selected player balances
   const playerGeneratedPaise = selectedPlayer
@@ -42,6 +44,9 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
 
   const playerOutstandingPaise = Math.max(0, playerGeneratedPaise - playerPaidPaise)
   const amountPaise = parseRupeesToPaise(amountRupees)
+  const festivalPaise = parseRupeesToPaise(festivalRupees)
+  const remainingTablePaise = Math.max(0, amountPaise - festivalPaise)
+  const sharePerOwnerPaise = Math.floor(remainingTablePaise / 4)
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,6 +59,11 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
 
     if (amountPaise <= 0) {
       setError('Payment amount must be greater than zero.')
+      return
+    }
+
+    if (festivalPaise > amountPaise) {
+      setError('Festival Jar allocation cannot exceed total payment amount.')
       return
     }
 
@@ -75,7 +85,18 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         receivedByOwnerId: receivedByOwnerId || undefined,
       })
 
-      const receiverName = owners.find((o) => o.id === receivedByOwnerId)?.name || 'Activity Pool'
+      const receiverName = collector?.name || 'Activity Pool'
+
+      if (festivalPaise > 0) {
+        await addBucketTransfer({
+          fromBucket: 'table_recovery',
+          toBucket: 'festival_fund',
+          amountPaise: festivalPaise,
+          notes: `Festival Jar allocation from ${selectedPlayer?.name || 'player'} payment (received by ${receiverName})`,
+          transferredAt: paidAt ? new Date(paidAt).toISOString() : undefined,
+        })
+      }
+
       setSuccessMsg(
         `Recorded ${formatINR(amountPaise)} payment for ${selectedPlayer?.name} (Received by: ${receiverName}). Remaining outstanding: ${formatINR(
           playerOutstandingPaise - amountPaise
@@ -92,6 +113,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   const handleResetAndClose = () => {
     setSuccessMsg(null)
     setAmountRupees('')
+    setFestivalRupees('')
     setNotes('')
     setError('')
     onClose()
@@ -221,6 +243,90 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             Tracks who physically holds this money so organizer pool & expense balances square up accurately.
           </p>
         </div>
+
+        {/* Put into Festival Jar (Optional) */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-slate-300">
+              Put into Festival Jar? (₹) <span className="text-slate-500 font-normal">(Optional)</span>
+            </label>
+            {amountPaise > 0 && (
+              <span className="text-[11px] text-purple-400 font-mono">
+                Community Party Kitty
+              </span>
+            )}
+          </div>
+          <div className="relative">
+            <span className="absolute left-3 top-2 text-sm font-medium text-slate-500">₹</span>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              placeholder="e.g. 1,000 (leave 0 or blank for none)"
+              value={festivalRupees}
+              onChange={(e) => {
+                setFestivalRupees(e.target.value)
+                if (error) setError('')
+              }}
+              className="w-full pl-7 pr-3 py-2 text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-purple-500"
+            />
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Money in the Festival Jar stays in the group kitty for parties/events and is not divided among personal pockets.
+          </p>
+        </div>
+
+        {/* Live 4-Way Breakdown Preview */}
+        {amountPaise > 0 && (
+          <div className="p-3.5 bg-slate-950 border border-slate-800/80 rounded-xl space-y-2 text-xs">
+            <div className="font-semibold text-slate-200 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <span>💰</span>
+                <span>How this {formatINR(amountPaise)} is Split</span>
+              </span>
+              <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                Equal 4-Way
+              </span>
+            </div>
+
+            {festivalPaise > 0 && (
+              <div className="flex justify-between items-center bg-purple-500/10 border border-purple-500/20 px-2.5 py-1.5 rounded-lg text-purple-300 font-mono text-xs">
+                <span>🎪 Festival Jar (Community):</span>
+                <span className="font-bold">{formatINR(festivalPaise)}</span>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-lg text-amber-300 font-mono text-xs">
+              <span>🎱 Table Reimbursement:</span>
+              <span className="font-bold">
+                {formatINR(remainingTablePaise)} ({formatINR(sharePerOwnerPaise)} each)
+              </span>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800/80 text-[11px] text-slate-400 space-y-1">
+              <div className="text-slate-200 font-medium">
+                • <span className="text-indigo-300 font-semibold">{collector?.name || 'Collector'}</span> keeps{' '}
+                <span className="text-emerald-400 font-mono font-bold">{formatINR(sharePerOwnerPaise)}</span>
+                {festivalPaise > 0 ? (
+                  <span className="text-purple-300">
+                    {' '}(+ holds {formatINR(festivalPaise)} for Festival Jar)
+                  </span>
+                ) : null}
+              </div>
+              {owners
+                .filter((o) => o.id !== (receivedByOwnerId || collector?.id))
+                .map((other) => (
+                  <div key={other.id} className="text-slate-300">
+                    • <span className="text-indigo-300 font-semibold">{collector?.name || 'Collector'}</span> owes{' '}
+                    <span className="font-semibold text-slate-200">{other.name}</span>:{' '}
+                    <span className="text-amber-400 font-mono font-bold">
+                      {formatINR(sharePerOwnerPaise)}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
         {/* Paid Date */}
         <div className="space-y-1.5">

@@ -210,6 +210,7 @@ export interface LedgerSummary {
     netPositionPaise: number
     tableReservesHeldPaise: number
   }>
+  totalOwnerPoolPaise: number
   totalOwnerEntitlementPaise: number
   totalOwnerSettledPaise: number
   remainingOwnerSettlementPaise: number

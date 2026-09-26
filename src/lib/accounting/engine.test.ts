@@ -257,7 +257,7 @@ describe('Pure Accounting Engine Specification Tests', () => {
     expect(summary.tableRecoveryAccumulatedPaise).toBe(52650 * 100)
     expect(summary.tableRecoveryRemainingPaise).toBe((65000 - 52650) * 100) // 12,350
     expect(summary.totalDistributableRakePaise).toBe(0)
-    expect(summary.totalOwnerEntitlementPaise).toBe(0)
+    expect(summary.totalOwnerEntitlementPaise).toBe(52650 * 100)
   })
 
   // Test 15: Multiple games calculate distributions independently
@@ -290,7 +290,7 @@ describe('Pure Accounting Engine Specification Tests', () => {
     expect(dist1.ownerDistributions['o3'] + dist2.ownerDistributions['o3']).toBe(700 * 100)
   })
 
-  // Test 16: Owner entitlement reconciliation: sum(all owner distributions) === sum(all distributable game rake)
+  // Test 16: Owner entitlement reconciliation: sum(all owner distributions) === sum(all distributable game rake + table recovery)
   it('Test 16: Exact integer paise reconciliation across all games and owners', () => {
     const games: GameRecord[] = [
       {
@@ -334,7 +334,7 @@ describe('Pure Accounting Engine Specification Tests', () => {
 
     expect(summary.reconciled).toBe(true)
     expect(summary.reconciliationDiffPaise).toBe(0)
-    expect(summary.totalOwnerEntitlementPaise).toBe(summary.totalDistributableRakePaise)
+    expect(summary.totalOwnerEntitlementPaise).toBe(summary.tableRecoveryAccumulatedPaise + summary.totalDistributableRakePaise)
   })
 
   // Test 17: At least one owner must be present (Prevent saving with 0 owners present)
@@ -421,9 +421,11 @@ describe('Pure Accounting Engine Specification Tests', () => {
     // Festival target = ₹30,000, accumulated = ₹0
     expect(summary.festivalFundAccumulatedPaise).toBe(0)
     expect(summary.festivalFundRemainingPaise).toBe(30000 * 100)
-    // Distributable owner profit = ₹0
+    // Distributable owner profit = ₹0 (all goes to table recovery)
     expect(summary.totalDistributableRakePaise).toBe(0)
-    expect(summary.totalOwnerEntitlementPaise).toBe(0)
+    // Table recovery reimburses the 4 owners equally (25% each)
+    expect(summary.totalOwnerEntitlementPaise).toBe(52650 * 100)
+    expect(summary.ownerEntitlements['o1'].grossEntitlementPaise).toBe((52650 * 100) / 4)
   })
 
   // Test 19: Uncovered expense handling when expense > gross rake
@@ -546,17 +548,19 @@ describe('Pure Accounting Engine Specification Tests', () => {
     expect(summary.tableRecoveryAccumulatedPaise).toBe(40000 * 100)
     // Distributable profit should be ₹10,000
     expect(summary.totalDistributableRakePaise).toBe(10000 * 100)
-    // Each of the 4 owners receives ₹2,500
-    expect(summary.ownerEntitlements['o1'].grossEntitlementPaise).toBe(2500 * 100)
-    expect(summary.ownerEntitlements['o2'].grossEntitlementPaise).toBe(2500 * 100)
-    expect(summary.ownerEntitlements['o3'].grossEntitlementPaise).toBe(2500 * 100)
-    expect(summary.ownerEntitlements['o4'].grossEntitlementPaise).toBe(2500 * 100)
+    // Both table recovery (₹40,000) and profit (₹10,000) reimburse/belong to the 4 owners equally (₹12,500 each)
+    expect(summary.ownerEntitlements['o1'].grossEntitlementPaise).toBe(12500 * 100)
+    expect(summary.ownerEntitlements['o2'].grossEntitlementPaise).toBe(12500 * 100)
+    expect(summary.ownerEntitlements['o3'].grossEntitlementPaise).toBe(12500 * 100)
+    expect(summary.ownerEntitlements['o4'].grossEntitlementPaise).toBe(12500 * 100)
     expect(summary.reconciled).toBe(true)
   })
 
   // Test 23: Cash Custody & Entitlements with Peer-to-Peer Transfer Matrix
   it('Test 23: Correctly tracks cash collected per partner, reimburses out-of-pocket expenses, and recommends P2P transfers', () => {
-    // 1 Game with ₹48,000 net rake (₹20,000 table recovery, ₹10,000 festival fund, ₹18,000 distributable profit = ₹4,500 each)
+    // 1 Game with ₹48,000 net rake (₹20,000 table recovery, ₹10,000 festival fund, ₹18,000 distributable profit)
+    // Table recovery ₹20,000 split 4 ways = ₹5,000 each. Profit ₹18,000 split 4 ways = ₹4,500 each.
+    // Total entitlement per owner = ₹9,500 each.
     const games: GameRecord[] = [
       {
         id: 'g1',
@@ -616,11 +620,11 @@ describe('Pure Accounting Engine Specification Tests', () => {
       settlements: [],
     })
 
-    // Entitlements: Each owner earned ₹4,500
-    expect(summary.ownerEntitlements['o1'].grossEntitlementPaise).toBe(4500 * 100)
-    expect(summary.ownerEntitlements['o2'].grossEntitlementPaise).toBe(4500 * 100)
-    expect(summary.ownerEntitlements['o3'].grossEntitlementPaise).toBe(4500 * 100)
-    expect(summary.ownerEntitlements['o4'].grossEntitlementPaise).toBe(4500 * 100)
+    // Entitlements: Each owner earned ₹9,500 (₹5,000 table recovery + ₹4,500 profit)
+    expect(summary.ownerEntitlements['o1'].grossEntitlementPaise).toBe(9500 * 100)
+    expect(summary.ownerEntitlements['o2'].grossEntitlementPaise).toBe(9500 * 100)
+    expect(summary.ownerEntitlements['o3'].grossEntitlementPaise).toBe(9500 * 100)
+    expect(summary.ownerEntitlements['o4'].grossEntitlementPaise).toBe(9500 * 100)
 
     // Cash held
     expect(summary.ownerEntitlements['o1'].cashCollectedPaise).toBe(40000 * 100)
@@ -630,26 +634,26 @@ describe('Pure Accounting Engine Specification Tests', () => {
     expect(summary.ownerEntitlements['o3'].netCashHeldPaise).toBe(-2000 * 100)
 
     // Net Positions:
-    // o3: 4,500 profit + 2,000 expense reimbursement = +6,500 owed to o3
-    expect(summary.ownerEntitlements['o3'].netPositionPaise).toBe(6500 * 100)
-    // o4: 4,500 profit = +4,500 owed to o4
-    expect(summary.ownerEntitlements['o4'].netPositionPaise).toBe(4500 * 100)
-    // o1: 4,500 profit - 40,000 cash held = -35,500 (holds excess)
-    expect(summary.ownerEntitlements['o1'].netPositionPaise).toBe(-35500 * 100)
-    // o2: 4,500 profit - 10,000 cash held = -5,500 (holds excess)
-    expect(summary.ownerEntitlements['o2'].netPositionPaise).toBe(-5500 * 100)
+    // o3: 9,500 entitlement + 2,000 expense reimbursement = +11,500 owed to o3
+    expect(summary.ownerEntitlements['o3'].netPositionPaise).toBe(11500 * 100)
+    // o4: 9,500 entitlement = +9,500 owed to o4
+    expect(summary.ownerEntitlements['o4'].netPositionPaise).toBe(9500 * 100)
+    // o1: 9,500 entitlement - 40,000 cash held = -30,500 (holds excess)
+    expect(summary.ownerEntitlements['o1'].netPositionPaise).toBe(-30500 * 100)
+    // o2: 9,500 entitlement - 10,000 cash held = -500 (holds excess)
+    expect(summary.ownerEntitlements['o2'].netPositionPaise).toBe(-500 * 100)
 
-    // Recommended transfers satisfy creditors o3 (₹6,500) and o4 (₹4,500)
+    // Recommended transfers satisfy creditors o3 (₹11,500) and o4 (₹9,500) = ₹21,000
     const totalTransferred = summary.recommendedTransfers.reduce((s, t) => s + t.amountPaise, 0)
-    expect(totalTransferred).toBe((6500 + 4500) * 100)
+    expect(totalTransferred).toBe((11500 + 9500) * 100)
 
-    // After satisfying creditors, the remaining excess matches Table Recovery (₹20k) + Festival Fund (₹10k) = ₹30k
-    expect(summary.totalTableReservesAccumulatedPaise).toBe(30000 * 100)
+    // After satisfying creditors, the remaining excess matches Festival Fund (₹10,000)
+    expect(summary.festivalFundAccumulatedPaise).toBe(10000 * 100)
     const totalReservesHeld = Object.values(summary.ownerEntitlements).reduce(
       (s, e) => s + e.tableReservesHeldPaise,
       0
     )
-    expect(totalReservesHeld).toBe(30000 * 100)
+    expect(totalReservesHeld).toBe(10000 * 100)
   })
 
   // Test 24: P2P Settlement payout properly registers payer and recipient
