@@ -541,10 +541,12 @@ export function calculateLedgerSummary(params: {
   }
 
   // 4. Process Expenses Paid Out of Pocket by Owners
+  let totalExpensesPaidByOwnersPaise = 0
   for (const game of activeGames) {
     for (const exp of game.expenses || []) {
       if (exp.paidByOwnerId && ownerEntitlements[exp.paidByOwnerId]) {
         ownerEntitlements[exp.paidByOwnerId].expensesPaidPaise += exp.amountPaise
+        totalExpensesPaidByOwnersPaise += exp.amountPaise
       }
     }
   }
@@ -552,6 +554,7 @@ export function calculateLedgerSummary(params: {
   for (const exp of activeExpenses) {
     if (exp.paidByOwnerId && ownerEntitlements[exp.paidByOwnerId]) {
       ownerEntitlements[exp.paidByOwnerId].expensesPaidPaise += exp.amountPaise
+      totalExpensesPaidByOwnersPaise += exp.amountPaise
     }
   }
 
@@ -567,7 +570,7 @@ export function calculateLedgerSummary(params: {
 
   // Calculate Cash Basis Entitlements vs Uncollected Accrued Entitlements
   // Organizers can only equalize/transfer cash that has actually been collected from members.
-  // Uncollected member dues remain pending and are only distributed once received.
+  // Out-of-pocket expenses are reimbursed first from collected cash, then remaining cash is distributed equally.
   const totalGrossOwnerPoolPaise = currentTableAccumulatedPaise + totalDistributableRakePaise
 
   if (activePayments.length === 0 && totalRakeCollectedPaise === 0) {
@@ -577,15 +580,21 @@ export function calculateLedgerSummary(params: {
       ent.uncollectedEntitlementPaise = 0
     }
   } else {
+    // Net cash collected after reimbursing out-of-pocket expenses
+    const netCashAvailablePaise = Math.max(
+      0,
+      totalRakeCollectedPaise - totalExpensesPaidByOwnersPaise
+    )
+
     // Waterfall on actual cash collected:
     // 1. Table Recovery (reimburses owners equally up to table target)
     const collectedTableRecoveryPaise = Math.min(
-      totalRakeCollectedPaise,
+      netCashAvailablePaise,
       settings.tableRecoveryTargetPaise
     )
     const remainingCashAfterTable = Math.max(
       0,
-      totalRakeCollectedPaise - settings.tableRecoveryTargetPaise
+      netCashAvailablePaise - settings.tableRecoveryTargetPaise
     )
     // 2. Festival Fund (retained as community table reserve, not distributed to owners)
     const collectedFestivalFundPaise = Math.min(
