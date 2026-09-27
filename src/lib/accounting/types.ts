@@ -193,6 +193,8 @@ export interface LedgerSummary {
   // Expenses & Adjustments
   totalSessionExpensesPaise: number
   totalGeneralExpensesPaise: number
+  totalAllExpensesPaise: number
+  netRakeGeneratedPaise: number
   totalCreditsAdjustmentsPaise: number
   netGeneralAdjustmentPaise: number // General expenses minus credits
 

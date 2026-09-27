@@ -1070,6 +1070,87 @@ describe('Pure Accounting Engine Specification Tests', () => {
     }
     expect(summary.totalTableReservesInCustodyPaise).toBe(0)
   })
+
+  // Test 30: Whatever goes into expenses cannot be in table share, profit, or festival jar
+  it('Test 30: Whatever goes in expense is deducted first and cannot be in table share, profit, or festival jar', () => {
+    // ₹13,700 total gross fees recorded
+    const historicalRake = [
+      {
+        id: 'h1',
+        playerId: 'p1',
+        amountPaise: 13700 * 100, // ₹13,700
+        entryDate: '2026-09-01T10:00:00Z',
+        status: 'active' as const,
+      },
+    ]
+
+    // ₹4,000 moved to festival jar
+    const bucketTransfers = [
+      {
+        id: 'bt-1',
+        transferredAt: '2026-09-01T12:00:00Z',
+        fromBucket: 'table_recovery' as const,
+        toBucket: 'festival_fund' as const,
+        amountPaise: 4000 * 100,
+        status: 'active' as const,
+      },
+    ]
+
+    // Tanna paid ₹1,000 bills out of pocket
+    const expenses = [
+      {
+        id: 'exp-1',
+        type: 'monthly_expense' as const,
+        amountPaise: 1000 * 100,
+        description: 'bills',
+        expenseDate: '2026-09-02T10:00:00Z',
+        status: 'active' as const,
+        paidByOwnerId: 'o3', // Tanna
+      },
+    ]
+
+    const summary = calculateLedgerSummary({
+      owners: mockOwnerDefs,
+      games: [],
+      historicalRake,
+      payments: [],
+      expenses,
+      settlements: [],
+      bucketTransfers,
+    })
+
+    // 1. Total Fees Generated is ₹13,700
+    expect(summary.totalRakeGeneratedPaise).toBe(13700 * 100)
+
+    // 2. Expenses is ₹1,000
+    expect(summary.totalAllExpensesPaise).toBe(1000 * 100)
+    expect(summary.totalGeneralExpensesPaise).toBe(1000 * 100)
+
+    // 3. Net Rake Generated is ₹13,700 - ₹1,000 = ₹12,700
+    expect(summary.netRakeGeneratedPaise).toBe(12700 * 100)
+
+    // 4. Festival Jar is ₹4,000 (marked as used)
+    expect(summary.festivalFundAccumulatedPaise).toBe(4000 * 100)
+
+    // 5. Table Recovery is ₹8,700 (NOT ₹9,700, because ₹1,000 was deducted for expense!)
+    // The ₹1,000 expense is NOT in table share, profit, or festival jar!
+    expect(summary.tableRecoveryAccumulatedPaise).toBe(8700 * 100)
+    expect(summary.totalDistributableRakePaise).toBe(0)
+
+    // 6. Reconciliation: Expenses (₹1,000) + Table (₹8,700) + Festival (₹4,000) + Profit (₹0) = ₹13,700
+    const totalAccountedFor =
+      summary.totalAllExpensesPaise +
+      summary.tableRecoveryAccumulatedPaise +
+      summary.festivalFundAccumulatedPaise +
+      summary.totalDistributableRakePaise
+    expect(totalAccountedFor).toBe(summary.totalRakeGeneratedPaise)
+    expect(summary.reconciled).toBe(true)
+
+    // 7. Each owner's gross table entitlement is ₹8,700 / 4 = ₹2,175
+    for (const ent of Object.values(summary.ownerEntitlements)) {
+      expect(ent.grossEntitlementPaise).toBe(2175 * 100)
+    }
+  })
 })
 
 

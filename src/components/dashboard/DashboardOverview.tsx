@@ -75,7 +75,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Every rupee accounted for: Table Reimbursement + Profit + Festival Jar = Total Fees (Diff: {formatINR(summary.reconciliationDiffPaise)}).
+              Every rupee accounted for: Host Expenses + Table Recovery + Festival Jar (Used) + Profit = Total Fees (Diff: {formatINR(summary.reconciliationDiffPaise)}).
             </p>
           </div>
         </div>
@@ -289,18 +289,20 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <div className="text-[10px] text-indigo-400">Total recorded</div>
           </div>
 
-          {/* Step 2: Session Expenses */}
+          {/* Step 2: Host Expenses */}
           <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-3.5 flex flex-col justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
               2. Host Expenses
             </span>
             <div className="my-2">
               <div className="text-lg font-bold text-rose-400">
-                - {formatINR(summary.totalSessionExpensesPaise)}
+                - {formatINR(summary.totalAllExpensesPaise || (summary.totalSessionExpensesPaise + summary.totalGeneralExpensesPaise))}
               </div>
               <div className="text-[11px] text-slate-500">Reimbursed to host</div>
             </div>
-            <div className="text-[10px] text-rose-400/80">Expenses deducted first</div>
+            <div className="text-[10px] text-rose-400/80">
+              Deducted first · Not in table/profit/jar
+            </div>
           </div>
 
           {/* Step 3: Table Recovery */}

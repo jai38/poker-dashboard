@@ -284,6 +284,7 @@ export function calculateLedgerSummary(params: {
   type TimelineItem =
     | { type: 'historical'; date: Date; entry: HistoricalRakeEntry }
     | { type: 'game'; date: Date; entry: GameRecord }
+    | { type: 'expense'; date: Date; entry: GeneralExpense }
     | { type: 'transfer'; date: Date; entry: BucketTransfer }
 
   const timeline: TimelineItem[] = [
@@ -297,6 +298,13 @@ export function calculateLedgerSummary(params: {
       date: new Date(g.playedAt),
       entry: g,
     })),
+    ...activeExpenses
+      .filter((e) => e.type === 'monthly_expense')
+      .map((e) => ({
+        type: 'expense' as const,
+        date: new Date(e.expenseDate),
+        entry: e,
+      })),
     ...activeTransfers.map((t) => ({
       type: 'transfer' as const,
       date: new Date(t.transferredAt),
@@ -304,15 +312,13 @@ export function calculateLedgerSummary(params: {
     })),
   ]
 
-  // Sort chronologically. If dates are equal, historical entries come first, then games by gameNumber, then transfers.
+  // Sort chronologically. If dates are equal, historical entries come first, then games by gameNumber, then expenses, then transfers.
   timeline.sort((a, b) => {
     const timeDiff = a.date.getTime() - b.date.getTime()
     if (timeDiff !== 0) return timeDiff
     if (a.type !== b.type) {
-      if (a.type === 'historical') return -1
-      if (b.type === 'historical') return 1
-      if (a.type === 'game') return -1
-      if (b.type === 'game') return 1
+      const order: Record<string, number> = { historical: 1, game: 2, expense: 3, transfer: 4 }
+      return (order[a.type] || 0) - (order[b.type] || 0)
     }
     if (a.type === 'game' && b.type === 'game') {
       return a.entry.gameNumber - b.entry.gameNumber
@@ -433,6 +439,22 @@ export function calculateLedgerSummary(params: {
       } else if (transfer.toBucket === 'owner_profit') {
         totalDistributableRakePaise += amt
         creditOwnersEqually(amt)
+      }
+    } else if (item.type === 'expense') {
+      // General expenses reduce accumulated rake: profit first, then table recovery.
+      // Expenses are NEVER kept in table share, profit, or festival jar.
+      const amt = item.entry.amountPaise
+      if (totalDistributableRakePaise >= amt) {
+        totalDistributableRakePaise -= amt
+        debitOwnersEqually(amt)
+      } else {
+        const fromProfit = totalDistributableRakePaise
+        totalDistributableRakePaise = 0
+        if (fromProfit > 0) debitOwnersEqually(fromProfit)
+
+        const rem = amt - fromProfit
+        currentTableAccumulatedPaise = Math.max(0, currentTableAccumulatedPaise - rem)
+        debitOwnersEqually(rem)
       }
     } else {
       // Game entry
@@ -741,6 +763,8 @@ export function calculateLedgerSummary(params: {
 
   const generalExpensesList = activeExpenses.filter((e) => e.type === 'monthly_expense')
   const totalGeneralExpensesPaise = generalExpensesList.reduce((sum, e) => sum + e.amountPaise, 0)
+  const totalAllExpensesPaise = totalSessionExpensesPaise + totalGeneralExpensesPaise
+  const netRakeGeneratedPaise = Math.max(0, totalRakeGeneratedPaise - totalAllExpensesPaise)
 
   const creditsAdjustmentsList = activeExpenses.filter((e) => e.type === 'credit_adjustment')
   const totalCreditsAdjustmentsPaise = creditsAdjustmentsList.reduce((sum, e) => sum + e.amountPaise, 0)
@@ -778,6 +802,8 @@ export function calculateLedgerSummary(params: {
 
     totalSessionExpensesPaise,
     totalGeneralExpensesPaise,
+    totalAllExpensesPaise,
+    netRakeGeneratedPaise,
     totalCreditsAdjustmentsPaise,
     netGeneralAdjustmentPaise,
 
