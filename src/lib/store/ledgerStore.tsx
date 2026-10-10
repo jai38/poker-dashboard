@@ -262,6 +262,20 @@ async function insertSettlementResilient(client: SupabaseClient, row: any) {
   return { error }
 }
 
+async function insertBucketTransferResilient(client: SupabaseClient, row: any) {
+  const { error } = await client.from('bucket_transfers').insert(row)
+  if (error && (error.code === '42703' || error.code === 'PGRST204' || error.message?.includes('deducted_from_owner_id'))) {
+    console.warn('Bucket transfers table missing deducted_from_owner_id column. Retrying insert with encoded note:', error.message)
+    const { deducted_from_owner_id, ...fallback } = row
+    if (deducted_from_owner_id) {
+      const tag = `[deducted_owner:${deducted_from_owner_id}]`
+      fallback.notes = fallback.notes ? `${tag} ${fallback.notes}` : tag
+    }
+    return await client.from('bucket_transfers').insert(fallback)
+  }
+  return { error }
+}
+
 function generateInitialSeedState() {
   const initialPlayers: Player[] = INITIAL_SEED_PLAYERS.map((p) => ({
     id: p.id,
@@ -585,19 +599,67 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setSettlements(loadedSettlements)
       }
 
-      let loadedTransfers: BucketTransfer[] = []
+      let loadedTransfers: BucketTransfer[] = transfers
       if (dbTransfers) {
-        loadedTransfers = dbTransfers.map((t: any) => ({
-          id: t.id,
-          fromBucket: t.from_bucket,
-          toBucket: t.to_bucket,
-          amountPaise: Number(t.amount_paise),
-          transferredAt: t.transferred_at,
-          notes: t.notes,
-          status: t.status,
-          voidReason: t.void_reason,
-          deductedFromOwnerId: t.deducted_from_owner_id || undefined,
-        }))
+        let currentLocalTransfers: BucketTransfer[] = transfers
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY)
+          if (raw) {
+            const parsed = JSON.parse(raw)
+            if (Array.isArray(parsed.transfers)) {
+              currentLocalTransfers = parsed.transfers
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        loadedTransfers = dbTransfers.map((t: any) => {
+          const localMatch = currentLocalTransfers.find((lt) => lt.id === t.id)
+          let deductedOwner = t.deducted_from_owner_id || localMatch?.deductedFromOwnerId || undefined
+
+          // Extract encoded tag from notes if column was missing in remote DB
+          let cleanNotes = t.notes
+          if (!deductedOwner && cleanNotes && cleanNotes.includes('[deducted_owner:')) {
+            const match = cleanNotes.match(/\[deducted_owner:([^\]]+)\]/)
+            if (match && match[1]) {
+              deductedOwner = match[1]
+              cleanNotes = cleanNotes.replace(/\[deducted_owner:[^\]]+\]\s*/, '').trim() || null
+            }
+          }
+
+          return {
+            id: t.id,
+            fromBucket: t.from_bucket,
+            toBucket: t.to_bucket,
+            amountPaise: Number(t.amount_paise),
+            transferredAt: t.transferred_at,
+            notes: cleanNotes || t.notes,
+            status: t.status,
+            voidReason: t.void_reason,
+            deductedFromOwnerId: deductedOwner,
+          }
+        })
+
+        // Preserve any unsynced local transfers that failed to write to DB earlier
+        const dbIds = new Set(dbTransfers.map((t: any) => t.id))
+        const unsynced = currentLocalTransfers.filter((lt) => !dbIds.has(lt.id))
+        if (unsynced.length > 0) {
+          loadedTransfers = [...loadedTransfers, ...unsynced]
+          for (const ut of unsynced) {
+            insertBucketTransferResilient(supabase, {
+              id: ut.id,
+              from_bucket: ut.fromBucket,
+              to_bucket: ut.toBucket,
+              amount_paise: ut.amountPaise,
+              transferred_at: ut.transferredAt,
+              notes: ut.notes,
+              status: ut.status || 'active',
+              deducted_from_owner_id: ut.deductedFromOwnerId || null,
+            })
+          }
+        }
+
         setTransfers(loadedTransfers)
       }
 
@@ -640,7 +702,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         payments: loadedPayments,
         expenses: loadedExpenses,
         settlements: loadedSettlements,
-        transfers: loadedTransfers,
+        transfers: loadedTransfers.length > 0 ? loadedTransfers : transfers,
         settings: loadedSettings,
         auditLog: loadedAudit,
       })
@@ -2044,7 +2106,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     persist({ transfers: updatedTransfers })
 
     safeSupabaseOp((client) =>
-      client.from('bucket_transfers').insert({
+      insertBucketTransferResilient(client, {
         id: newTransfer.id,
         from_bucket: newTransfer.fromBucket,
         to_bucket: newTransfer.toBucket,

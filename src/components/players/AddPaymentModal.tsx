@@ -137,6 +137,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             amountPaise: festivalPaise,
             notes: `Festival Jar allocation from ${selectedPlayer?.name || 'player'} payment (received by ${receiverName})`,
             transferredAt: paidAt ? new Date(paidAt).toISOString() : undefined,
+            deductedFromOwnerId: receivedByOwnerId || undefined,
           })
         }
 

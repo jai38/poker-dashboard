@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS bucket_transfers (
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'voided')),
     void_reason TEXT,
+    deducted_from_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
@@ -129,6 +130,12 @@ CREATE TABLE IF NOT EXISTS audit_log (
     metadata JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
+
+-- Safe idempotent migrations for existing databases:
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS received_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS paid_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
+ALTER TABLE owner_settlements ADD COLUMN IF NOT EXISTS paid_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
+ALTER TABLE bucket_transfers ADD COLUMN IF NOT EXISTS deducted_from_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
 
 -- Row Level Security
 ALTER TABLE owners ENABLE ROW LEVEL SECURITY;

@@ -21,10 +21,12 @@ import {
   Coins,
   Pencil,
   Trash2,
+  Info,
 } from 'lucide-react'
 import { EditPaymentModal } from '../players/EditPaymentModal'
 import { EditHistoricalRakeModal } from '../players/EditHistoricalRakeModal'
 import { EditSettlementModal } from './EditSettlementModal'
+import { FestivalCalculationModal } from './FestivalCalculationModal'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 
 export const OwnerSettlementView: React.FC = () => {
@@ -35,6 +37,8 @@ export const OwnerSettlementView: React.FC = () => {
     payments,
     historicalRake,
     players,
+    transfers,
+    deleteBucketTransfer,
     updatePaymentCollector,
     assignAllUnassignedPayments,
     deletePayment,
@@ -46,10 +50,11 @@ export const OwnerSettlementView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isEditOwnersOpen, setIsEditOwnersOpen] = useState(false)
   const [isTransferOpen, setIsTransferOpen] = useState(false)
+  const [isFestivalCalcOpen, setIsFestivalCalcOpen] = useState(false)
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | undefined>(undefined)
   const [selectedPayerId, setSelectedPayerId] = useState<string | undefined>(undefined)
   const [selectedAmountPaise, setSelectedAmountPaise] = useState<number | undefined>(undefined)
-  const [activeTxTab, setActiveTxTab] = useState<'inflows' | 'fees' | 'settlements'>('inflows')
+  const [activeTxTab, setActiveTxTab] = useState<'inflows' | 'fees' | 'settlements' | 'transfers'>('inflows')
   const [quickAssignOwnerId, setQuickAssignOwnerId] = useState<string>(owners[0]?.id || '')
   const [isAssigning, setIsAssigning] = useState(false)
 
@@ -62,6 +67,7 @@ export const OwnerSettlementView: React.FC = () => {
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null)
   const [deletingRakeId, setDeletingRakeId] = useState<string | null>(null)
   const [deletingSettlementId, setDeletingSettlementId] = useState<string | null>(null)
+  const [deletingTransferId, setDeletingTransferId] = useState<string | null>(null)
 
   const handleBatchAssignUnassigned = async () => {
     if (!quickAssignOwnerId) return
@@ -101,6 +107,13 @@ export const OwnerSettlementView: React.FC = () => {
     }
   }
 
+  const handleDeleteTransferConfirm = async () => {
+    if (deletingTransferId) {
+      await deleteBucketTransfer(deletingTransferId)
+      setDeletingTransferId(null)
+    }
+  }
+
   const activeSettlements = [...settlements]
     .filter((s) => s.status === 'active')
     .sort((a, b) => new Date(b.settledAt).getTime() - new Date(a.settledAt).getTime())
@@ -112,6 +125,38 @@ export const OwnerSettlementView: React.FC = () => {
   const activeHistoricalRake = [...historicalRake]
     .filter((h) => h.status === 'active')
     .sort((a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime())
+
+  const activeTransfers = [...transfers]
+    .filter((t) => t.status === 'active')
+    .sort((a, b) => new Date(b.transferredAt).getTime() - new Date(a.transferredAt).getTime())
+
+  const getBucketBadge = (bucket: string) => {
+    switch (bucket) {
+      case 'table_recovery':
+        return (
+          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 inline-flex items-center gap-1 font-sans">
+            <span>🛠️</span>
+            <span>Table Share</span>
+          </span>
+        )
+      case 'festival_fund':
+        return (
+          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-purple-950/80 text-purple-300 border border-purple-800/60 inline-flex items-center gap-1 font-sans">
+            <span>🎪</span>
+            <span>Festival Jar</span>
+          </span>
+        )
+      case 'owner_profit':
+        return (
+          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 inline-flex items-center gap-1 font-sans">
+            <span>💰</span>
+            <span>Partner Profit</span>
+          </span>
+        )
+      default:
+        return <span className="text-slate-400 font-sans">{bucket}</span>
+    }
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
@@ -316,9 +361,20 @@ export const OwnerSettlementView: React.FC = () => {
                 <span className="text-[10px] font-sans text-slate-400 uppercase tracking-wider block">
                   Festival Jar (Used)
                 </span>
-                <span className="text-[10px] text-purple-400 font-sans font-medium px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-800/40">
-                  Expended
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsFestivalCalcOpen(true)}
+                    className="text-[10px] text-purple-400 hover:text-purple-300 font-sans font-medium flex items-center gap-0.5 hover:underline cursor-pointer"
+                    title="View exact calculations & ledger breakdown"
+                  >
+                    <Info className="w-3 h-3" />
+                    <span>Calculations</span>
+                  </button>
+                  <span className="text-[10px] text-purple-400 font-sans font-medium px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-800/40">
+                    Expended
+                  </span>
+                </div>
               </div>
               <div className="flex items-baseline gap-1.5 mt-0.5">
                 <span className="text-sm sm:text-base font-bold text-amber-300 font-mono">
@@ -820,6 +876,21 @@ export const OwnerSettlementView: React.FC = () => {
                 {activeSettlements.length}
               </span>
             </button>
+
+            <button
+              onClick={() => setActiveTxTab('transfers')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-2 ${
+                activeTxTab === 'transfers'
+                  ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 text-purple-400" />
+              <span>Fund Reallocations & Jar</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-950 border border-purple-500/30 font-mono text-purple-400">
+                {activeTransfers.length}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -1076,7 +1147,7 @@ export const OwnerSettlementView: React.FC = () => {
               </div>
             </>
           )
-        ) : (
+        ) : activeTxTab === 'settlements' ? (
           activeSettlements.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-500">
               No settlement payouts recorded yet. When organizers take out their entitled pool funds or transfer funds P2P, record it using the button above.
@@ -1186,6 +1257,117 @@ export const OwnerSettlementView: React.FC = () => {
               </div>
             </>
           )
+        ) : (
+          activeTransfers.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-500 space-y-2">
+              <p>No fund reallocations or bucket transfers recorded yet.</p>
+              <button
+                type="button"
+                onClick={() => setIsTransferOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>Allocate Funds to Festival Jar / Other Buckets</span>
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Mobile Transfers Cards */}
+              <div className="block sm:hidden divide-y divide-slate-800/60">
+                {activeTransfers.map((t) => {
+                  const deductedOwner = owners.find((o) => o.id === t.deductedFromOwnerId)
+                  return (
+                    <div key={t.id} className="p-3.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          {getBucketBadge(t.fromBucket)}
+                          <ArrowRight className="w-3 h-3 text-slate-500" />
+                          {getBucketBadge(t.toBucket)}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-amber-300 text-sm">
+                            {formatINR(t.amountPaise)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingTransferId(t.id)}
+                            title="Delete transfer"
+                            className="p-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>Deducted Partner Cash:</span>
+                        <span className="font-sans font-medium text-purple-300">
+                          {deductedOwner ? `${deductedOwner.name} only` : 'Auto (Proportional split)'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span>{t.notes || 'Fund reallocation'}</span>
+                        <span>{formatDateTime(t.transferredAt)}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Desktop Transfers Table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 font-medium">
+                      <th className="py-3 px-4">Date &amp; Time</th>
+                      <th className="py-3 px-4">Source Bucket</th>
+                      <th className="py-3 px-2 text-center"></th>
+                      <th className="py-3 px-4">Destination Bucket</th>
+                      <th className="py-3 px-4">Cash Deducted From</th>
+                      <th className="py-3 px-4">Notes / Purpose</th>
+                      <th className="py-3 px-4 text-right font-mono">Amount</th>
+                      <th className="py-3 px-4 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-mono">
+                    {activeTransfers.map((t) => {
+                      const deductedOwner = owners.find((o) => o.id === t.deductedFromOwnerId)
+                      return (
+                        <tr key={t.id} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="py-3 px-4 text-slate-400">{formatDateTime(t.transferredAt)}</td>
+                          <td className="py-3 px-4 font-sans">{getBucketBadge(t.fromBucket)}</td>
+                          <td className="py-3 px-2 text-center text-slate-500">
+                            <ArrowRight className="w-3.5 h-3.5 mx-auto text-slate-500" />
+                          </td>
+                          <td className="py-3 px-4 font-sans">{getBucketBadge(t.toBucket)}</td>
+                          <td className="py-3 px-4 font-sans text-xs">
+                            {deductedOwner ? (
+                              <span className="text-purple-300 font-semibold">{deductedOwner.name} only</span>
+                            ) : (
+                              <span className="text-slate-400">Auto (Proportional split)</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-slate-300 font-sans">{t.notes || 'Fund reallocation'}</td>
+                          <td className="py-3 px-4 text-right font-bold text-amber-300">
+                            {formatINR(t.amountPaise)}
+                          </td>
+                          <td className="py-3 px-4 text-center font-sans">
+                            <button
+                              type="button"
+                              onClick={() => setDeletingTransferId(t.id)}
+                              title="Delete transfer"
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )
         )}
       </div>
 
@@ -1271,6 +1453,25 @@ export const OwnerSettlementView: React.FC = () => {
         message="Are you sure you want to permanently delete this settlement payout? Organizer remaining entitlements will be restored immediately."
         confirmText="Delete Settlement"
         isDestructive
+      />
+
+      {/* Delete Transfer Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(deletingTransferId)}
+        onClose={() => setDeletingTransferId(null)}
+        onConfirm={handleDeleteTransferConfirm}
+        title="Delete Fund Reallocation / Transfer"
+        message="Are you sure you want to permanently delete this fund transfer? Bucket balances and partner cash custody will be recalculated immediately."
+        confirmText="Delete Transfer"
+        isDestructive
+      />
+
+      {/* Festival Calculations Modal */}
+      <FestivalCalculationModal
+        isOpen={isFestivalCalcOpen}
+        onClose={() => setIsFestivalCalcOpen(false)}
+        onOpenTransferModal={() => setIsTransferOpen(true)}
+        onViewTransfersTab={() => setActiveTxTab('transfers')}
       />
     </div>
   )
