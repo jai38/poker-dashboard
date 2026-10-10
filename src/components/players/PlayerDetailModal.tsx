@@ -188,12 +188,18 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
                               </span>
                               <span
                                 className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
-                                  h.entryType === 'game' || h.gameId
+                                  h.entryType === 'member_transfer'
+                                    ? 'bg-amber-950/80 text-amber-400 border border-amber-800/60'
+                                    : h.entryType === 'game' || h.gameId
                                     ? 'bg-indigo-950/80 text-indigo-400 border border-indigo-800/60'
                                     : 'bg-slate-800 text-slate-400'
                                 }`}
                               >
-                                {h.entryType === 'game' || h.gameId ? 'Session Activity' : 'Direct Entry'}
+                                {h.entryType === 'member_transfer'
+                                  ? 'Member Transfer (Debit)'
+                                  : h.entryType === 'game' || h.gameId
+                                  ? 'Session Activity'
+                                  : 'Direct Entry'}
                               </span>
                               {isVoided && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold uppercase">
@@ -252,6 +258,15 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-bold text-emerald-400">
                                 {formatINR(p.amountPaise)}
+                              </span>
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
+                                  p.paymentType === 'member_transfer'
+                                    ? 'bg-indigo-950/80 text-indigo-400 border border-indigo-800/60'
+                                    : 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60'
+                                }`}
+                              >
+                                {p.paymentType === 'member_transfer' ? 'Member Transfer' : 'Direct Inflow'}
                               </span>
                               {isVoided && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold uppercase">

@@ -1151,6 +1151,58 @@ describe('Pure Accounting Engine Specification Tests', () => {
       expect(ent.grossEntitlementPaise).toBe(2175 * 100)
     }
   })
+
+  // Test 31: Member-to-member transfer does not pollute club rake or cash collections
+  it('Test 31: Member transfer preserves club totals while recording player debits and credits', () => {
+    const owners = [
+      { id: 'o1', name: 'Partner 1', isActive: true, isDefaultCollector: true },
+      { id: 'o2', name: 'Partner 2', isActive: true },
+    ]
+
+    const initialRake = [
+      { id: 'r1', playerId: 'p1', amountPaise: 2000 * 100, entryDate: '2026-09-01T00:00:00Z', status: 'active' as const },
+    ]
+
+    // Player 2 transfers ₹1,000 to Player 1:
+    // r_transfer (fee on p2) and pay_transfer (credit on p1)
+    const transferRake = [
+      ...initialRake,
+      {
+        id: 'r_transfer',
+        playerId: 'p2',
+        amountPaise: 1000 * 100,
+        entryDate: '2026-09-02T00:00:00Z',
+        entryType: 'member_transfer' as const,
+        status: 'active' as const,
+      },
+    ]
+
+    const transferPayment = [
+      {
+        id: 'pay_transfer',
+        playerId: 'p1',
+        amountPaise: 1000 * 100,
+        paidAt: '2026-09-02T00:00:00Z',
+        paymentType: 'member_transfer' as const,
+        status: 'active' as const,
+      },
+    ]
+
+    const summary = calculateLedgerSummary({
+      owners,
+      games: [],
+      historicalRake: transferRake,
+      payments: transferPayment,
+      expenses: [],
+      settlements: [],
+    })
+
+    // Club rake generated is strictly the original ₹2,000 (transfer is NOT club income)
+    expect(summary.totalRakeGeneratedPaise).toBe(2000 * 100)
+    // Cash collected by owners is ₹0 (no cash was paid to partners)
+    expect(summary.totalRakeCollectedPaise).toBe(0)
+    expect(summary.totalOutstandingPaise).toBe(2000 * 100)
+  })
 })
 
 

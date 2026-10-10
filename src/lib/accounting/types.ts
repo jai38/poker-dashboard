@@ -56,12 +56,13 @@ export interface HistoricalRakeEntry {
   id: string
   playerId: string
   gameId?: string
-  entryType?: 'game' | 'historical'
+  entryType?: 'game' | 'historical' | 'member_transfer'
   amountPaise: number
   entryDate: string | Date
   status: 'active' | 'voided'
   notes?: string
   voidReason?: string
+  transferTargetPlayerId?: string
 }
 
 export interface GamePlayerRakeInput {
@@ -81,6 +82,8 @@ export interface PlayerPayment {
   notes?: string
   voidReason?: string
   receivedByOwnerId?: string // Partner who collected this payment (UPI/Cash/Account)
+  paymentType?: 'direct' | 'member_transfer'
+  transferSourcePlayerId?: string
 }
 
 export interface GeneralExpense {

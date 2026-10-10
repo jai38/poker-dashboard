@@ -106,6 +106,12 @@ interface LedgerContextType {
     receivedByOwnerId?: string
   }) => Promise<PlayerPayment>
   deletePayment: (paymentId: string) => Promise<void>
+  transferBetweenMembers: (data: {
+    toPlayerId: string
+    sources: Array<{ fromPlayerId: string; amountPaise: number }>
+    transferDate?: string
+    notes?: string
+  }) => Promise<{ payments: PlayerPayment[]; rakes: HistoricalRakeEntry[] }>
 
   voidPayment: (paymentId: string, reason: string) => Promise<void>
   updatePaymentCollector: (paymentId: string, ownerId?: string) => Promise<void>
@@ -1342,6 +1348,108 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return newPayment
   }
 
+  // 4b. Transfer Between Members
+  async function transferBetweenMembers(data: {
+    toPlayerId: string
+    sources: Array<{ fromPlayerId: string; amountPaise: number }>
+    transferDate?: string
+    notes?: string
+  }): Promise<{ payments: PlayerPayment[]; rakes: HistoricalRakeEntry[] }> {
+    const toPlayer = players.find((p) => p.id === data.toPlayerId)
+    if (!toPlayer) throw new Error('Recipient member not found.')
+
+    if (!data.sources || data.sources.length === 0) {
+      throw new Error('Please select at least one source member to transfer from.')
+    }
+
+    const newPayments: PlayerPayment[] = []
+    const newRakes: HistoricalRakeEntry[] = []
+    const dateStr = data.transferDate || new Date().toISOString()
+    const now = Date.now()
+
+    for (let i = 0; i < data.sources.length; i++) {
+      const src = data.sources[i]
+      if (src.amountPaise <= 0) continue
+      const fromPlayer = players.find((p) => p.id === src.fromPlayerId)
+      if (!fromPlayer) throw new Error('Source member not found.')
+
+      const rakeId = `rake-transfer-${now}-${i}`
+      const payId = `pay-transfer-${now}-${i}`
+
+      // Deduction (fee entry) for the source member
+      const rakeEntry: HistoricalRakeEntry = {
+        id: rakeId,
+        playerId: src.fromPlayerId,
+        amountPaise: src.amountPaise,
+        entryDate: dateStr,
+        entryType: 'member_transfer',
+        status: 'active',
+        notes: `Transfer to ${toPlayer.name}${data.notes ? ': ' + data.notes : ''}`,
+        transferTargetPlayerId: data.toPlayerId,
+      }
+      newRakes.push(rakeEntry)
+
+      // Payment credit for the recipient member
+      const paymentEntry: PlayerPayment = {
+        id: payId,
+        playerId: data.toPlayerId,
+        amountPaise: src.amountPaise,
+        paidAt: dateStr,
+        status: 'active',
+        paymentType: 'member_transfer',
+        transferSourcePlayerId: src.fromPlayerId,
+        notes: `Transfer from ${fromPlayer.name}${data.notes ? ': ' + data.notes : ''}`,
+      }
+      newPayments.push(paymentEntry)
+    }
+
+    if (newPayments.length === 0) {
+      throw new Error('Transfer amount must be greater than zero.')
+    }
+
+    const updatedPayments = [...payments, ...newPayments]
+    const updatedRakes = [...historicalRake, ...newRakes]
+
+    setPayments(updatedPayments)
+    setHistoricalRake(updatedRakes)
+    persist({ payments: updatedPayments, historicalRake: updatedRakes })
+
+    safeSupabaseOp(async (client) => {
+      for (const r of newRakes) {
+        await client.from('rake_entries').insert({
+          id: r.id,
+          player_id: r.playerId,
+          amount_paise: r.amountPaise,
+          entry_type: 'member_transfer',
+          entry_date: r.entryDate,
+          notes: r.notes,
+          status: 'active',
+        })
+      }
+      for (const p of newPayments) {
+        await insertPaymentResilient(client, {
+          id: p.id,
+          player_id: p.playerId,
+          amount_paise: p.amountPaise,
+          paid_at: p.paidAt,
+          notes: p.notes,
+          status: 'active',
+        })
+      }
+    })
+
+    addAudit('MEMBER_TRANSFER_RECORDED', 'player', data.toPlayerId, {
+      toPlayerName: toPlayer.name,
+      sources: data.sources.map((s) => ({
+        fromPlayerId: s.fromPlayerId,
+        amountPaise: s.amountPaise,
+      })),
+      totalAmountPaise: newPayments.reduce((sum, p) => sum + p.amountPaise, 0),
+    })
+
+    return { payments: newPayments, rakes: newRakes }
+  }
+
   // 5. Void Payment
   async function voidPayment(paymentId: string, reason: string): Promise<void> {
     if (!reason || reason.trim() === '') {
@@ -2419,6 +2527,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addPayment,
         editPayment,
         deletePayment,
+        transferBetweenMembers,
         voidPayment,
         updatePaymentCollector,
         assignAllUnassignedPayments,
