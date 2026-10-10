@@ -13,12 +13,13 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { summary, addBucketTransfer } = useLedger()
+  const { summary, addBucketTransfer, owners } = useLedger()
 
   const [fromBucket, setFromBucket] = useState<'table_recovery' | 'festival_fund'>('table_recovery')
   const [toBucket, setToBucket] = useState<'table_recovery' | 'festival_fund' | 'owner_profit'>('owner_profit')
   const [amountRupees, setAmountRupees] = useState('')
   const [notes, setNotes] = useState('')
+  const [deductedFromOwnerId, setDeductedFromOwnerId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -62,6 +63,7 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
         toBucket,
         amountPaise: parsedAmount,
         notes: notes.trim() || undefined,
+        deductedFromOwnerId: toBucket === 'festival_fund' ? (deductedFromOwnerId || undefined) : undefined,
       })
       onClose()
     } catch (err: any) {
@@ -150,13 +152,37 @@ export const AddBucketTransferModal: React.FC<AddBucketTransferModalProps> = ({
               </p>
             </div>
           ) : toBucket === 'festival_fund' ? (
-            <div className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-500/30 p-3 rounded-lg">
-              <p className="font-semibold text-amber-200">
-                🎉 Event Fund (Festival Reserve):
-              </p>
-              <p className="text-amber-300/90">
-                Funds will be reserved for upcoming festivals, celebrations, and team events.
-              </p>
+            <div className="space-y-3">
+              <div className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-500/30 p-3 rounded-lg">
+                <p className="font-semibold text-amber-200">
+                  🎉 Event Fund (Festival Reserve):
+                </p>
+                <p className="text-amber-300/90">
+                  Funds will be reserved for upcoming festivals, celebrations, and team events.
+                </p>
+              </div>
+
+              <div className="space-y-1.5 p-3 rounded-lg bg-slate-950/60 border border-slate-800">
+                <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+                  <span>Deduct Cash From Partner</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+                </label>
+                <select
+                  value={deductedFromOwnerId}
+                  onChange={(e) => setDeductedFromOwnerId(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">Auto (Split proportional across cash holders)</option>
+                  {owners.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name} only
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400">
+                  If selected, 100% of this transfer will reduce this partner's cash-in-hand custody.
+                </p>
+              </div>
             </div>
           ) : (
             <div className="text-[11px] text-indigo-300 bg-indigo-950/40 border border-indigo-500/30 p-3 rounded-lg">

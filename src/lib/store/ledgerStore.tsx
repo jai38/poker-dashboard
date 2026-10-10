@@ -165,6 +165,7 @@ interface LedgerContextType {
     amountPaise: number
     notes?: string
     transferredAt?: string
+    deductedFromOwnerId?: string
   }) => Promise<BucketTransfer>
   editBucketTransfer: (transferId: string, data: {
     fromBucket?: 'table_recovery' | 'festival_fund'
@@ -172,6 +173,7 @@ interface LedgerContextType {
     amountPaise: number
     notes?: string
     transferredAt?: string
+    deductedFromOwnerId?: string
   }) => Promise<BucketTransfer>
   deleteBucketTransfer: (transferId: string) => Promise<void>
 
@@ -594,6 +596,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           notes: t.notes,
           status: t.status,
           voidReason: t.void_reason,
+          deductedFromOwnerId: t.deducted_from_owner_id || undefined,
         }))
         setTransfers(loadedTransfers)
       }
@@ -609,6 +612,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             loadedSettings.equalDistributionThresholdPaise = Number(row.value.amount_paise)
           } else if (row.key === 'absent_owner_percentage' && row.value?.percentage != null) {
             loadedSettings.absentOwnerPercentage = Number(row.value.percentage)
+          } else if (row.key === 'festival_fund_deducted_owner_id' && row.value?.owner_id !== undefined) {
+            loadedSettings.festivalFundDeductedOwnerId = row.value.owner_id || undefined
           }
         }
         setSettings(loadedSettings)
@@ -1915,6 +1920,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         { key: 'festival_fund_target', value: { amount_paise: updated.festivalFundTargetPaise } },
         { key: 'equal_distribution_threshold', value: { amount_paise: updated.equalDistributionThresholdPaise } },
         { key: 'absent_owner_percentage', value: { percentage: updated.absentOwnerPercentage } },
+        { key: 'festival_fund_deducted_owner_id', value: { owner_id: updated.festivalFundDeductedOwnerId || null } },
       ])
     )
 
@@ -1999,6 +2005,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     amountPaise: number
     notes?: string
     transferredAt?: string
+    deductedFromOwnerId?: string
   }): Promise<BucketTransfer> {
     if (data.amountPaise <= 0) {
       throw new Error('Transfer amount must be greater than zero.')
@@ -2029,6 +2036,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       amountPaise: data.amountPaise,
       notes: data.notes,
       status: 'active',
+      deductedFromOwnerId: data.deductedFromOwnerId,
     }
 
     const updatedTransfers = [...transfers, newTransfer]
@@ -2044,6 +2052,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         transferred_at: newTransfer.transferredAt,
         notes: newTransfer.notes,
         status: 'active',
+        deducted_from_owner_id: newTransfer.deductedFromOwnerId || null,
       })
     )
 
@@ -2052,6 +2061,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       toBucket: data.toBucket,
       amountPaise: data.amountPaise,
       notes: data.notes,
+      deductedFromOwnerId: data.deductedFromOwnerId,
     })
 
     return newTransfer

@@ -50,6 +50,7 @@ export interface BucketTransfer {
   notes?: string
   status: 'active' | 'voided'
   voidReason?: string
+  deductedFromOwnerId?: string
 }
 
 export interface HistoricalRakeEntry {
@@ -135,6 +136,7 @@ export interface AccountingSettings {
   equalDistributionThresholdPaise: number // e.g. 100,000 paise = ₹1,000
   absentOwnerPercentage: number // e.g. 0.10 for 10%
   numberOfOwners: number // 4
+  festivalFundDeductedOwnerId?: string // If set, 100% of Festival Jar is deducted from this partner's cash
 }
 
 export const DEFAULT_ACCOUNTING_SETTINGS: AccountingSettings = {
@@ -143,6 +145,7 @@ export const DEFAULT_ACCOUNTING_SETTINGS: AccountingSettings = {
   equalDistributionThresholdPaise: 1000 * 100,
   absentOwnerPercentage: 0.10,
   numberOfOwners: 4,
+  festivalFundDeductedOwnerId: undefined,
 }
 
 export interface GameCalculationResult {

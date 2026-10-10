@@ -636,23 +636,70 @@ export function calculateLedgerSummary(params: {
       totalRakeCollectedPaise
     )
 
-    // Deduct festival fund cash from the custody of partners who collected cash (proportional to their collections)
-    let remainingFestivalCashToDeduct = actualCollectedFestivalFundPaise
     const ownerList = Object.values(ownerEntitlements)
-    for (let i = 0; i < ownerList.length; i++) {
-      const ent = ownerList[i]
-      if (i === ownerList.length - 1) {
-        ent.festivalFundDepositedPaise = remainingFestivalCashToDeduct
+
+    // Deduct festival fund cash from partner custody:
+    // If a specific partner is selected in settings, 100% of Festival Jar is deducted from that partner's cash.
+    if (settings.festivalFundDeductedOwnerId && ownerEntitlements[settings.festivalFundDeductedOwnerId]) {
+      for (const ent of Object.values(ownerEntitlements)) {
+        if (ent.ownerId === settings.festivalFundDeductedOwnerId) {
+          ent.festivalFundDepositedPaise = actualCollectedFestivalFundPaise
+        } else {
+          ent.festivalFundDepositedPaise = 0
+        }
+      }
+    } else {
+      // Check if active bucket transfers to festival_fund have specific deductedFromOwnerId
+      const specificFestivalDeductions: Record<string, number> = {}
+      let totalSpecificDeductionsPaise = 0
+      for (const t of activeTransfers) {
+        if (t.toBucket === 'festival_fund' && t.deductedFromOwnerId && ownerEntitlements[t.deductedFromOwnerId]) {
+          specificFestivalDeductions[t.deductedFromOwnerId] =
+            (specificFestivalDeductions[t.deductedFromOwnerId] || 0) + t.amountPaise
+          totalSpecificDeductionsPaise += t.amountPaise
+        }
+      }
+
+      if (totalSpecificDeductionsPaise > 0) {
+        let remFestivalCash = Math.max(0, actualCollectedFestivalFundPaise - totalSpecificDeductionsPaise)
+        for (const ent of Object.values(ownerEntitlements)) {
+          ent.festivalFundDepositedPaise = specificFestivalDeductions[ent.ownerId] || 0
+        }
+        if (remFestivalCash > 0) {
+          const ownerList = Object.values(ownerEntitlements)
+          for (let i = 0; i < ownerList.length; i++) {
+            const ent = ownerList[i]
+            if (i === ownerList.length - 1) {
+              ent.festivalFundDepositedPaise = (ent.festivalFundDepositedPaise || 0) + remFestivalCash
+            } else {
+              const share = totalRakeCollectedPaise > 0
+                ? Math.floor((remFestivalCash * ent.cashCollectedPaise) / totalRakeCollectedPaise)
+                : 0
+              ent.festivalFundDepositedPaise = (ent.festivalFundDepositedPaise || 0) + share
+              remFestivalCash -= share
+            }
+          }
+        }
       } else {
-        const share =
-          totalRakeCollectedPaise > 0
-            ? Math.floor(
-                (actualCollectedFestivalFundPaise * ent.cashCollectedPaise) /
-                  totalRakeCollectedPaise
-              )
-            : 0
-        ent.festivalFundDepositedPaise = share
-        remainingFestivalCashToDeduct -= share
+        // Auto-deduct proportionally across partners who collected cash
+        let remainingFestivalCashToDeduct = actualCollectedFestivalFundPaise
+        const ownerList = Object.values(ownerEntitlements)
+        for (let i = 0; i < ownerList.length; i++) {
+          const ent = ownerList[i]
+          if (i === ownerList.length - 1) {
+            ent.festivalFundDepositedPaise = remainingFestivalCashToDeduct
+          } else {
+            const share =
+              totalRakeCollectedPaise > 0
+                ? Math.floor(
+                    (actualCollectedFestivalFundPaise * ent.cashCollectedPaise) /
+                      totalRakeCollectedPaise
+                  )
+                : 0
+            ent.festivalFundDepositedPaise = share
+            remainingFestivalCashToDeduct -= share
+          }
+        }
       }
     }
 

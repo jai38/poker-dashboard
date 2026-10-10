@@ -1262,6 +1262,99 @@ describe('Pure Accounting Engine Specification Tests', () => {
     expect(summary.ownerEntitlements['o1'].grossEntitlementPaise).toBe(2000 * 100)
     expect(summary.ownerEntitlements['o2'].grossEntitlementPaise).toBe(2000 * 100)
   })
+
+  it('Test 33: Festival Jar (Used) can be deducted from one selected person only', () => {
+    const owners = [
+      { id: 'o1', name: 'Owner 1', isActive: true },
+      { id: 'o2', name: 'Owner 2', isActive: true },
+    ]
+
+    const historicalRake = [
+      {
+        id: 'h1',
+        playerId: 'p1',
+        amountPaise: 10000 * 100, // ₹10,000 generated
+        entryDate: '2026-09-01T20:00:00Z',
+        status: 'active' as const,
+      },
+    ]
+
+    const bucketTransfers = [
+      {
+        id: 'bt1',
+        fromBucket: 'table_recovery' as const,
+        toBucket: 'festival_fund' as const,
+        amountPaise: 4000 * 100, // ₹4,000 into Festival Jar
+        transferredAt: '2026-09-01T21:00:00Z',
+        status: 'active' as const,
+      },
+    ]
+
+    const payments = [
+      {
+        id: 'pay1',
+        playerId: 'p1',
+        amountPaise: 8000 * 100, // Owner 1 collected ₹8,000
+        paidAt: '2026-09-01T22:00:00Z',
+        status: 'active' as const,
+        receivedByOwnerId: 'o1',
+      },
+      {
+        id: 'pay2',
+        playerId: 'p2',
+        amountPaise: 2000 * 100, // Owner 2 collected ₹2,000
+        paidAt: '2026-09-01T22:00:00Z',
+        status: 'active' as const,
+        receivedByOwnerId: 'o2',
+      },
+    ]
+
+    // Scenario A: When festivalFundDeductedOwnerId is 'o1', 100% of Festival Jar is deducted from Owner 1 only
+    const summaryDedicated = calculateLedgerSummary({
+      owners,
+      games: [],
+      historicalRake,
+      payments,
+      expenses: [],
+      settlements: [],
+      bucketTransfers,
+      settings: {
+        ...DEFAULT_ACCOUNTING_SETTINGS,
+        tableRecoveryTargetPaise: 0,
+        festivalFundTargetPaise: 0,
+        festivalFundDeductedOwnerId: 'o1',
+      },
+    })
+
+    expect(summaryDedicated.festivalFundAccumulatedPaise).toBe(4000 * 100)
+    // Owner 1 has the full ₹4,000 deducted
+    expect(summaryDedicated.ownerEntitlements['o1'].festivalFundDepositedPaise).toBe(4000 * 100)
+    expect(summaryDedicated.ownerEntitlements['o1'].netCashHeldPaise).toBe(4000 * 100) // ₹8,000 collected - ₹4,000 festival = ₹4,000
+
+    // Owner 2 has ₹0 deducted from Festival Jar
+    expect(summaryDedicated.ownerEntitlements['o2'].festivalFundDepositedPaise).toBe(0)
+    expect(summaryDedicated.ownerEntitlements['o2'].netCashHeldPaise).toBe(2000 * 100) // Full ₹2,000 remains in hand
+
+    // Scenario B: When not selected (auto), it splits proportionally (₹3,200 from o1, ₹800 from o2)
+    const summaryAuto = calculateLedgerSummary({
+      owners,
+      games: [],
+      historicalRake,
+      payments,
+      expenses: [],
+      settlements: [],
+      bucketTransfers,
+      settings: {
+        ...DEFAULT_ACCOUNTING_SETTINGS,
+        tableRecoveryTargetPaise: 0,
+        festivalFundTargetPaise: 0,
+        festivalFundDeductedOwnerId: undefined,
+      },
+    })
+
+    expect(summaryAuto.ownerEntitlements['o1'].festivalFundDepositedPaise).toBe(3200 * 100)
+    expect(summaryAuto.ownerEntitlements['o2'].festivalFundDepositedPaise).toBe(800 * 100)
+  })
 })
 
 

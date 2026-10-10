@@ -40,6 +40,8 @@ export const OwnerSettlementView: React.FC = () => {
     deletePayment,
     deleteHistoricalRake,
     deleteOwnerSettlement,
+    settings,
+    updateSettings,
   } = useLedger()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isEditOwnersOpen, setIsEditOwnersOpen] = useState(false)
@@ -308,21 +310,56 @@ export const OwnerSettlementView: React.FC = () => {
               {formatINR(summary.tableRecoveryAccumulatedPaise)}
             </span>
           </div>
-          <div className="col-span-2 sm:col-span-1">
-            <span className="text-[10px] font-sans text-slate-400 uppercase tracking-wider block">
-              Festival Jar (Used)
-            </span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-sm sm:text-base font-bold text-amber-300">
-                {formatINR(summary.festivalFundAccumulatedPaise)}
-              </span>
-              <span className="text-[10px] text-purple-400 font-sans font-medium">
-                (Used)
-              </span>
+          <div className="col-span-2 sm:col-span-1 p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-sans text-slate-400 uppercase tracking-wider block">
+                  Festival Jar (Used)
+                </span>
+                <span className="text-[10px] text-purple-400 font-sans font-medium px-1.5 py-0.5 rounded bg-purple-950/60 border border-purple-800/40">
+                  Expended
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="text-sm sm:text-base font-bold text-amber-300 font-mono">
+                  {formatINR(summary.festivalFundAccumulatedPaise)}
+                </span>
+                <span className="text-[10px] text-slate-500 font-sans">
+                  Not in custody
+                </span>
+              </div>
             </div>
-            <span className="text-[10px] text-slate-500 font-sans block mt-0.5">
-              Expended · Not in personal custody
-            </span>
+
+            {/* Deduct from 1 person or Auto-split selector */}
+            <div className="mt-2 pt-2 border-t border-slate-800/80">
+              <label className="text-[10px] font-medium text-slate-300 flex items-center justify-between">
+                <span>Deduct from:</span>
+                {settings.festivalFundDeductedOwnerId ? (
+                  <span className="text-[10px] text-purple-400 font-semibold">
+                    1 person only
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-500">
+                    Auto-split
+                  </span>
+                )}
+              </label>
+              <select
+                value={settings.festivalFundDeductedOwnerId || ''}
+                onChange={async (e) => {
+                  const val = e.target.value || undefined
+                  await updateSettings({ festivalFundDeductedOwnerId: val })
+                }}
+                className="mt-1 w-full px-2 py-1 text-xs bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-purple-500 cursor-pointer"
+              >
+                <option value="">Auto (Split Proportional)</option>
+                {owners.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name} only
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
