@@ -19,8 +19,9 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { owners, voidGame, addSessionExpense, removeSessionExpense, games, summary } = useLedger()
+  const { owners, voidGame, deleteGame, addSessionExpense, removeSessionExpense, games, summary } = useLedger()
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
   // Expense form states
   const [isAddingExpense, setIsAddingExpense] = useState(false)
@@ -41,6 +42,12 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
   const handleVoidConfirm = async (reason?: string) => {
     if (!reason) return
     await voidGame(liveGame.id, reason)
+    onClose()
+  }
+
+  const handleDeleteConfirm = async () => {
+    await deleteGame(liveGame.id)
+    setIsDeleteDialogOpen(false)
     onClose()
   }
 
@@ -345,18 +352,29 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
 
           {/* Action Footer */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-800">
-            {!isVoided ? (
+            <div className="flex items-center gap-2">
+              {!isVoided ? (
+                <button
+                  type="button"
+                  onClick={() => setIsVoidDialogOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-colors"
+                >
+                  <Ban className="w-3.5 h-3.5" />
+                  <span>Void Session</span>
+                </button>
+              ) : (
+                <span className="text-xs text-slate-500 italic">This session is voided.</span>
+              )}
+
               <button
                 type="button"
-                onClick={() => setIsVoidDialogOpen(true)}
+                onClick={() => setIsDeleteDialogOpen(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
               >
-                <Ban className="w-3.5 h-3.5" />
-                <span>Void Session</span>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Session</span>
               </button>
-            ) : (
-              <span className="text-xs text-slate-500 italic">This session is voided.</span>
-            )}
+            </div>
 
             <button
               type="button"
@@ -374,11 +392,21 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
         onClose={() => setIsVoidDialogOpen(false)}
         onConfirm={handleVoidConfirm}
         title={`Void Session #${gameRecord.gameNumber}`}
-        message="Are you sure you want to void this session? Financial calculations will be immediately recalculated with this session excluded. Financial records are never hard-deleted."
+        message="Are you sure you want to void this session? Financial calculations will be immediately recalculated with this session excluded."
         confirmText="Void Session"
         isDestructive
         requireReason
         reasonPlaceholder="e.g. Duplicate session entered by mistake"
+      />
+
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        title={`Permanently Delete Session #${gameRecord.gameNumber}`}
+        message="Are you sure you want to permanently delete this session? This will remove all associated ledger records and recalculate all financials."
+        confirmText="Delete Session"
+        isDestructive
       />
     </>
   )

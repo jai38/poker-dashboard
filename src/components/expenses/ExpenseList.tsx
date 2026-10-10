@@ -2,13 +2,17 @@ import React, { useState } from 'react'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { formatINR, formatDate } from '../../lib/accounting/formatters'
 import { AddExpenseModal } from './AddExpenseModal'
+import { EditExpenseModal } from './EditExpenseModal'
 import { ConfirmDialog } from '../common/ConfirmDialog'
-import { Receipt, PlusCircle, Ban, AlertCircle } from 'lucide-react'
+import { Receipt, PlusCircle, Ban, AlertCircle, Pencil, Trash2 } from 'lucide-react'
+import { GeneralExpense } from '../../lib/accounting/types'
 
 export const ExpenseList: React.FC = () => {
-  const { expenses, games, voidExpense, summary } = useLedger()
+  const { expenses, games, voidExpense, deleteExpense, summary } = useLedger()
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [voidingExpenseId, setVoidingExpenseId] = useState<string | null>(null)
+  const [editingExpense, setEditingExpense] = useState<GeneralExpense | null>(null)
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null)
 
   const sortedExpenses = expenses.slice().reverse()
 
@@ -16,6 +20,12 @@ export const ExpenseList: React.FC = () => {
     if (!voidingExpenseId || !reason) return
     await voidExpense(voidingExpenseId, reason)
     setVoidingExpenseId(null)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingExpenseId) return
+    await deleteExpense(deletingExpenseId)
+    setDeletingExpenseId(null)
   }
 
   const getTypeBadge = (type: string) => {
@@ -175,15 +185,31 @@ export const ExpenseList: React.FC = () => {
                         )}
                       </span>
 
-                      {!isVoided && (
+                      <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => setVoidingExpenseId(exp.id)}
-                          className="px-2.5 py-1 text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-md transition-colors flex items-center gap-1"
+                          onClick={() => setEditingExpense(exp)}
+                          className="px-2 py-1 text-xs font-medium text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 rounded-md transition-colors flex items-center gap-1"
                         >
-                          <Ban className="w-3 h-3" />
-                          <span>Void</span>
+                          <Pencil className="w-3 h-3" />
+                          <span>Edit</span>
                         </button>
-                      )}
+                        {!isVoided && (
+                          <button
+                            onClick={() => setVoidingExpenseId(exp.id)}
+                            className="px-2 py-1 text-xs font-medium text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-md transition-colors flex items-center gap-1"
+                          >
+                            <Ban className="w-3 h-3" />
+                            <span>Void</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setDeletingExpenseId(exp.id)}
+                          className="px-2 py-1 text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-md transition-colors flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )
@@ -259,17 +285,31 @@ export const ExpenseList: React.FC = () => {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          {!isVoided ? (
+                          <div className="flex items-center justify-center gap-1">
                             <button
-                              onClick={() => setVoidingExpenseId(exp.id)}
-                              className="p-1 text-slate-400 hover:text-rose-400 rounded transition-colors"
-                              title="Void Expense"
+                              onClick={() => setEditingExpense(exp)}
+                              className="p-1 text-slate-400 hover:text-indigo-400 rounded transition-colors"
+                              title="Edit Expense"
                             >
-                              <Ban className="w-3.5 h-3.5" />
+                              <Pencil className="w-3.5 h-3.5" />
                             </button>
-                          ) : (
-                            <span className="text-slate-600 text-[10px]">Voided</span>
-                          )}
+                            {!isVoided && (
+                              <button
+                                onClick={() => setVoidingExpenseId(exp.id)}
+                                className="p-1 text-slate-400 hover:text-amber-400 rounded transition-colors"
+                                title="Void Expense"
+                              >
+                                <Ban className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setDeletingExpenseId(exp.id)}
+                              className="p-1 text-slate-400 hover:text-rose-400 rounded transition-colors"
+                              title="Delete Expense Permanently"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -288,6 +328,14 @@ export const ExpenseList: React.FC = () => {
         />
       )}
 
+      {editingExpense && (
+        <EditExpenseModal
+          isOpen={Boolean(editingExpense)}
+          onClose={() => setEditingExpense(null)}
+          expense={editingExpense}
+        />
+      )}
+
       <ConfirmDialog
         isOpen={Boolean(voidingExpenseId)}
         onClose={() => setVoidingExpenseId(null)}
@@ -298,6 +346,16 @@ export const ExpenseList: React.FC = () => {
         isDestructive
         requireReason
         reasonPlaceholder="e.g. Duplicate entry or refund entered"
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(deletingExpenseId)}
+        onClose={() => setDeletingExpenseId(null)}
+        onConfirm={handleDeleteConfirm}
+        title="Permanently Delete Expense"
+        message="Are you sure you want to permanently delete this expense? This will erase it from the ledger entirely and update all balances."
+        confirmText="Delete Expense"
+        isDestructive
       />
     </div>
   )

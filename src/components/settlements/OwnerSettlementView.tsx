@@ -18,7 +18,14 @@ import {
   TrendingDown,
   ArrowDownLeft,
   ArrowUpRight,
+  Coins,
+  Pencil,
+  Trash2,
 } from 'lucide-react'
+import { EditPaymentModal } from '../players/EditPaymentModal'
+import { EditHistoricalRakeModal } from '../players/EditHistoricalRakeModal'
+import { EditSettlementModal } from './EditSettlementModal'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 
 export const OwnerSettlementView: React.FC = () => {
   const {
@@ -26,9 +33,13 @@ export const OwnerSettlementView: React.FC = () => {
     summary,
     settlements,
     payments,
+    historicalRake,
     players,
     updatePaymentCollector,
     assignAllUnassignedPayments,
+    deletePayment,
+    deleteHistoricalRake,
+    deleteOwnerSettlement,
   } = useLedger()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isEditOwnersOpen, setIsEditOwnersOpen] = useState(false)
@@ -36,9 +47,19 @@ export const OwnerSettlementView: React.FC = () => {
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | undefined>(undefined)
   const [selectedPayerId, setSelectedPayerId] = useState<string | undefined>(undefined)
   const [selectedAmountPaise, setSelectedAmountPaise] = useState<number | undefined>(undefined)
-  const [activeTxTab, setActiveTxTab] = useState<'inflows' | 'settlements'>('inflows')
+  const [activeTxTab, setActiveTxTab] = useState<'inflows' | 'fees' | 'settlements'>('inflows')
   const [quickAssignOwnerId, setQuickAssignOwnerId] = useState<string>(owners[0]?.id || '')
   const [isAssigning, setIsAssigning] = useState(false)
+
+  // Editing state
+  const [editingPayment, setEditingPayment] = useState<any | null>(null)
+  const [editingRakeEntry, setEditingRakeEntry] = useState<any | null>(null)
+  const [editingSettlement, setEditingSettlement] = useState<any | null>(null)
+
+  // Deletion state
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null)
+  const [deletingRakeId, setDeletingRakeId] = useState<string | null>(null)
+  const [deletingSettlementId, setDeletingSettlementId] = useState<string | null>(null)
 
   const handleBatchAssignUnassigned = async () => {
     if (!quickAssignOwnerId) return
@@ -57,6 +78,27 @@ export const OwnerSettlementView: React.FC = () => {
     setIsModalOpen(true)
   }
 
+  const handleDeletePaymentConfirm = async () => {
+    if (deletingPaymentId) {
+      await deletePayment(deletingPaymentId)
+      setDeletingPaymentId(null)
+    }
+  }
+
+  const handleDeleteRakeConfirm = async () => {
+    if (deletingRakeId) {
+      await deleteHistoricalRake(deletingRakeId)
+      setDeletingRakeId(null)
+    }
+  }
+
+  const handleDeleteSettlementConfirm = async () => {
+    if (deletingSettlementId) {
+      await deleteOwnerSettlement(deletingSettlementId)
+      setDeletingSettlementId(null)
+    }
+  }
+
   const activeSettlements = [...settlements]
     .filter((s) => s.status === 'active')
     .sort((a, b) => new Date(b.settledAt).getTime() - new Date(a.settledAt).getTime())
@@ -64,6 +106,10 @@ export const OwnerSettlementView: React.FC = () => {
   const activePayments = [...payments]
     .filter((p) => p.status === 'active')
     .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime())
+
+  const activeHistoricalRake = [...historicalRake]
+    .filter((h) => h.status === 'active')
+    .sort((a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime())
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
@@ -692,7 +738,7 @@ export const OwnerSettlementView: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800 self-start sm:self-auto">
             <button
               onClick={() => setActiveTxTab('inflows')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-2 ${
@@ -705,6 +751,21 @@ export const OwnerSettlementView: React.FC = () => {
               <span>Member Collections (Inflows)</span>
               <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-950 border border-emerald-500/30 font-mono text-emerald-400">
                 {activePayments.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTxTab('fees')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors flex items-center gap-2 ${
+                activeTxTab === 'fees'
+                  ? 'bg-amber-600/20 text-amber-300 border border-amber-500/30 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span>Member Fees & Rakes</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-950 border border-amber-500/30 font-mono text-amber-400">
+                {activeHistoricalRake.length}
               </span>
             </button>
 
@@ -737,14 +798,32 @@ export const OwnerSettlementView: React.FC = () => {
                 {activePayments.map((p) => {
                   const player = players.find((pl) => pl.id === p.playerId)
                   return (
-                    <div key={p.id} className="p-3.5 space-y-1.5">
+                    <div key={p.id} className="p-3.5 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-sm text-slate-200">
                           {player?.name || 'Member'}
                         </span>
-                        <span className="font-mono font-bold text-emerald-400 text-sm">
-                          +{formatINR(p.amountPaise)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-emerald-400 text-sm">
+                            +{formatINR(p.amountPaise)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingPayment(p)}
+                            title="Edit payment"
+                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-emerald-400" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingPaymentId(p.id)}
+                            title="Delete payment"
+                            className="p-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 mt-1">
                         <span>Collected by:</span>
@@ -780,6 +859,7 @@ export const OwnerSettlementView: React.FC = () => {
                       <th className="py-3 px-4">Collected By (Cash Custody)</th>
                       <th className="py-3 px-4">Notes / Details</th>
                       <th className="py-3 px-4 text-right font-mono">Amount Received</th>
+                      <th className="py-3 px-4 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-mono">
@@ -809,6 +889,148 @@ export const OwnerSettlementView: React.FC = () => {
                           <td className="py-3 px-4 text-right font-bold text-emerald-400">
                             +{formatINR(p.amountPaise)}
                           </td>
+                          <td className="py-3 px-4 text-center font-sans">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingPayment(p)}
+                                title="Edit payment"
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-emerald-400" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingPaymentId(p.id)}
+                                title="Delete payment"
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )
+        ) : activeTxTab === 'fees' ? (
+          activeHistoricalRake.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-500">
+              No member fee entries recorded yet. Record fee generation from Quick Fee or inside Member Details.
+            </div>
+          ) : (
+            <>
+              {/* Mobile Member Fees Cards */}
+              <div className="block sm:hidden divide-y divide-slate-800/60">
+                {activeHistoricalRake.map((h) => {
+                  const player = players.find((pl) => pl.id === h.playerId)
+                  return (
+                    <div key={h.id} className="p-3.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-sm text-slate-200">
+                          {player?.name || 'Member'}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-amber-400 text-sm">
+                            {formatINR(h.amountPaise)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingRakeEntry(h)}
+                            title="Edit fee entry"
+                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-indigo-400" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingRakeId(h.id)}
+                            title="Delete fee entry"
+                            className="p-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
+                          h.entryType === 'game' || h.gameId
+                            ? 'bg-indigo-950/80 text-indigo-400 border border-indigo-800/60'
+                            : 'bg-slate-800 text-slate-400'
+                        }`}>
+                          {h.entryType === 'game' || h.gameId ? 'Session Activity' : 'Direct Entry'}
+                        </span>
+                        <span>{formatDateTime(h.entryDate)}</span>
+                      </div>
+                      {h.notes && (
+                        <div className="text-[11px] text-slate-400 italic">
+                          {h.notes}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Desktop Member Fees Table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 font-medium">
+                      <th className="py-3 px-4">Date &amp; Time</th>
+                      <th className="py-3 px-4">Member Name</th>
+                      <th className="py-3 px-4">Entry Type</th>
+                      <th className="py-3 px-4">Notes / Reference</th>
+                      <th className="py-3 px-4 text-right font-mono">Fee Amount</th>
+                      <th className="py-3 px-4 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-mono">
+                    {activeHistoricalRake.map((h) => {
+                      const player = players.find((pl) => pl.id === h.playerId)
+                      return (
+                        <tr key={h.id} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="py-3 px-4 text-slate-400">{formatDateTime(h.entryDate)}</td>
+                          <td className="py-3 px-4 font-sans font-semibold text-slate-200">
+                            {player?.name || 'Member'}
+                          </td>
+                          <td className="py-3 px-4 font-sans">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
+                              h.entryType === 'game' || h.gameId
+                                ? 'bg-indigo-950/80 text-indigo-400 border border-indigo-800/60'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}>
+                              {h.entryType === 'game' || h.gameId ? 'Session Activity' : 'Direct Entry'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-slate-300 font-sans">{h.notes || 'Member fee'}</td>
+                          <td className="py-3 px-4 text-right font-bold text-amber-400">
+                            {formatINR(h.amountPaise)}
+                          </td>
+                          <td className="py-3 px-4 text-center font-sans">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingRakeEntry(h)}
+                                title="Edit fee entry"
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-indigo-400" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingRakeId(h.id)}
+                                title="Delete fee entry"
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       )
                     })}
@@ -830,7 +1052,7 @@ export const OwnerSettlementView: React.FC = () => {
                   const owner = owners.find((o) => o.id === s.ownerId)
                   const payer = owners.find((o) => o.id === s.paidByOwnerId)
                   return (
-                    <div key={s.id} className="p-3.5 space-y-1">
+                    <div key={s.id} className="p-3.5 space-y-1.5">
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="font-semibold text-sm text-slate-200">{owner?.name || s.ownerId}</span>
@@ -840,7 +1062,25 @@ export const OwnerSettlementView: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <span className="font-mono font-bold text-emerald-400 text-sm">{formatINR(s.amountPaise)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-emerald-400 text-sm">{formatINR(s.amountPaise)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingSettlement(s)}
+                            title="Edit settlement"
+                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-indigo-400" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingSettlementId(s.id)}
+                            title="Delete settlement"
+                            className="p-1 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between text-[11px] text-slate-400">
                         <span>{s.notes || 'Settlement'}</span>
@@ -861,6 +1101,7 @@ export const OwnerSettlementView: React.FC = () => {
                       <th className="py-3 px-4">Paid By (Source)</th>
                       <th className="py-3 px-4">Payout Method / Notes</th>
                       <th className="py-3 px-4 text-right font-mono">Amount Paid</th>
+                      <th className="py-3 px-4 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-mono">
@@ -879,6 +1120,26 @@ export const OwnerSettlementView: React.FC = () => {
                           <td className="py-3 px-4 text-slate-300 font-sans">{s.notes || 'Settlement'}</td>
                           <td className="py-3 px-4 text-right font-bold text-emerald-400">
                             {formatINR(s.amountPaise)}
+                          </td>
+                          <td className="py-3 px-4 text-center font-sans">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingSettlement(s)}
+                                title="Edit settlement"
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-indigo-400" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingSettlementId(s.id)}
+                                title="Delete settlement"
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -914,6 +1175,66 @@ export const OwnerSettlementView: React.FC = () => {
           onClose={() => setIsTransferOpen(false)}
         />
       )}
+
+      {/* Edit Payment Modal */}
+      {editingPayment && (
+        <EditPaymentModal
+          isOpen={Boolean(editingPayment)}
+          onClose={() => setEditingPayment(null)}
+          payment={editingPayment}
+        />
+      )}
+
+      {/* Edit Fee Entry Modal */}
+      {editingRakeEntry && (
+        <EditHistoricalRakeModal
+          isOpen={Boolean(editingRakeEntry)}
+          onClose={() => setEditingRakeEntry(null)}
+          rakeEntry={editingRakeEntry}
+        />
+      )}
+
+      {/* Edit Settlement Modal */}
+      {editingSettlement && (
+        <EditSettlementModal
+          isOpen={Boolean(editingSettlement)}
+          onClose={() => setEditingSettlement(null)}
+          settlement={editingSettlement}
+        />
+      )}
+
+      {/* Delete Payment Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(deletingPaymentId)}
+        onClose={() => setDeletingPaymentId(null)}
+        onConfirm={handleDeletePaymentConfirm}
+        title="Delete Member Payment"
+        message="Are you sure you want to permanently delete this payment? Member outstanding balances and cash collected will be recalculated immediately."
+        confirmText="Delete Payment"
+        isDestructive
+      />
+
+      {/* Delete Fee Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(deletingRakeId)}
+        onClose={() => setDeletingRakeId(null)}
+        onConfirm={handleDeleteRakeConfirm}
+        title="Delete Member Fee Entry"
+        message="Are you sure you want to permanently delete this fee entry? Member outstanding balances and total fees generated will be recalculated immediately."
+        confirmText="Delete Fee Entry"
+        isDestructive
+      />
+
+      {/* Delete Settlement Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={Boolean(deletingSettlementId)}
+        onClose={() => setDeletingSettlementId(null)}
+        onConfirm={handleDeleteSettlementConfirm}
+        title="Delete Organizer Settlement"
+        message="Are you sure you want to permanently delete this settlement payout? Organizer remaining entitlements will be restored immediately."
+        confirmText="Delete Settlement"
+        isDestructive
+      />
     </div>
   )
 }

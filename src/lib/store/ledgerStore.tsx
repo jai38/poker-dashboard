@@ -71,6 +71,7 @@ interface LedgerContextType {
   }) => Promise<GameRecord>
 
   voidGame: (gameId: string, reason: string) => Promise<void>
+  deleteGame: (gameId: string) => Promise<void>
 
   addHistoricalRake: (data: {
     playerId?: string
@@ -81,6 +82,14 @@ interface LedgerContextType {
     notes?: string
     receivedByOwnerId?: string
   }) => Promise<{ rake: HistoricalRakeEntry; payment?: PlayerPayment }>
+  editHistoricalRake: (rakeId: string, data: {
+    playerId?: string
+    amountPaise: number
+    entryDate?: string
+    notes?: string
+  }) => Promise<HistoricalRakeEntry>
+  deleteHistoricalRake: (rakeId: string) => Promise<void>
+  voidHistoricalRake: (rakeId: string, reason: string) => Promise<void>
 
   addPayment: (data: {
     playerId: string
@@ -89,6 +98,14 @@ interface LedgerContextType {
     notes?: string
     receivedByOwnerId?: string
   }) => Promise<PlayerPayment>
+  editPayment: (paymentId: string, data: {
+    playerId?: string
+    amountPaise: number
+    paidAt?: string
+    notes?: string
+    receivedByOwnerId?: string
+  }) => Promise<PlayerPayment>
+  deletePayment: (paymentId: string) => Promise<void>
 
   voidPayment: (paymentId: string, reason: string) => Promise<void>
   updatePaymentCollector: (paymentId: string, ownerId?: string) => Promise<void>
@@ -108,6 +125,14 @@ interface LedgerContextType {
     gameId?: string | null
     paidByOwnerId?: string
   }) => Promise<GeneralExpense>
+  editExpense: (expenseId: string, data: {
+    type: 'session_expense' | 'monthly_expense' | 'credit_adjustment'
+    amountPaise: number
+    description: string
+    expenseDate?: string
+    paidByOwnerId?: string
+  }) => Promise<GeneralExpense>
+  deleteExpense: (expenseId: string) => Promise<void>
 
   voidExpense: (expenseId: string, reason: string) => Promise<void>
 
@@ -118,6 +143,15 @@ interface LedgerContextType {
     notes?: string
     paidByOwnerId?: string
   }) => Promise<OwnerSettlement>
+  editOwnerSettlement: (settlementId: string, data: {
+    ownerId?: string
+    amountPaise: number
+    settledAt?: string
+    notes?: string
+    paidByOwnerId?: string
+  }) => Promise<OwnerSettlement>
+  deleteOwnerSettlement: (settlementId: string) => Promise<void>
+  voidOwnerSettlement: (settlementId: string, reason: string) => Promise<void>
 
   addBucketTransfer: (data: {
     fromBucket: 'table_recovery' | 'festival_fund'
@@ -126,6 +160,14 @@ interface LedgerContextType {
     notes?: string
     transferredAt?: string
   }) => Promise<BucketTransfer>
+  editBucketTransfer: (transferId: string, data: {
+    fromBucket?: 'table_recovery' | 'festival_fund'
+    toBucket?: 'table_recovery' | 'festival_fund' | 'owner_profit'
+    amountPaise: number
+    notes?: string
+    transferredAt?: string
+  }) => Promise<BucketTransfer>
+  deleteBucketTransfer: (transferId: string) => Promise<void>
 
   voidBucketTransfer: (transferId: string, reason: string) => Promise<void>
 
@@ -926,6 +968,30 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     })
   }
 
+  // 2a-2. Hard Delete Game / Session
+  async function deleteGame(gameId: string): Promise<void> {
+    const target = games.find((g) => g.id === gameId)
+    if (!target) throw new Error('Game not found.')
+
+    const updatedGames = games.filter((g) => g.id !== gameId)
+    const updatedHistorical = historicalRake.filter((h) => h.gameId !== gameId)
+
+    setGames(updatedGames)
+    setHistoricalRake(updatedHistorical)
+    persist({ games: updatedGames, historicalRake: updatedHistorical })
+
+    safeSupabaseOp(async (client) => {
+      await client.from('rake_entries').delete().eq('game_id', gameId)
+      await client.from('expenses').delete().eq('game_id', gameId)
+      await client.from('game_owners').delete().eq('game_id', gameId)
+      await client.from('games').delete().eq('id', gameId)
+    })
+
+    addAudit('GAME_DELETED', 'game', gameId, {
+      gameNumber: target.gameNumber,
+    })
+  }
+
   // 2b. Add Session Expense to an Existing Game
   async function addSessionExpense(
     gameId: string,
@@ -1139,6 +1205,92 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return { rake: newRake, payment: newPayment }
   }
 
+  // 3b. Edit Fee / Historical Rake Entry
+  async function editHistoricalRake(rakeId: string, data: {
+    playerId?: string
+    amountPaise: number
+    entryDate?: string
+    notes?: string
+  }): Promise<HistoricalRakeEntry> {
+    if (data.amountPaise <= 0) {
+      throw new Error('Fee amount must be greater than zero.')
+    }
+    const target = historicalRake.find((h) => h.id === rakeId)
+    if (!target) throw new Error('Fee entry not found.')
+
+    const updatedRake: HistoricalRakeEntry = {
+      ...target,
+      playerId: data.playerId || target.playerId,
+      amountPaise: data.amountPaise,
+      entryDate: data.entryDate || target.entryDate,
+      notes: data.notes !== undefined ? data.notes : target.notes,
+    }
+
+    const updatedList = historicalRake.map((h) => (h.id === rakeId ? updatedRake : h))
+    setHistoricalRake(updatedList)
+    persist({ historicalRake: updatedList })
+
+    safeSupabaseOp(async (client) => {
+      await client.from('rake_entries').update({
+        player_id: updatedRake.playerId,
+        amount_paise: updatedRake.amountPaise,
+        entry_date: updatedRake.entryDate,
+        notes: updatedRake.notes,
+      }).eq('id', rakeId)
+    })
+
+    addAudit('FEE_ENTRY_UPDATED', 'historical_rake', rakeId, {
+      previousAmount: target.amountPaise,
+      newAmount: data.amountPaise,
+      playerId: updatedRake.playerId,
+    })
+
+    return updatedRake
+  }
+
+  // 3c. Delete Fee / Historical Rake Entry
+  async function deleteHistoricalRake(rakeId: string): Promise<void> {
+    const target = historicalRake.find((h) => h.id === rakeId)
+    if (!target) throw new Error('Fee entry not found.')
+
+    const updatedList = historicalRake.filter((h) => h.id !== rakeId)
+    setHistoricalRake(updatedList)
+    persist({ historicalRake: updatedList })
+
+    safeSupabaseOp(async (client) => {
+      await client.from('rake_entries').delete().eq('id', rakeId)
+    })
+
+    addAudit('FEE_ENTRY_DELETED', 'historical_rake', rakeId, {
+      amountPaise: target.amountPaise,
+      playerId: target.playerId,
+    })
+  }
+
+  // 3d. Void Fee / Historical Rake Entry
+  async function voidHistoricalRake(rakeId: string, reason: string): Promise<void> {
+    if (!reason || reason.trim() === '') {
+      throw new Error('A reason is required to void a fee entry.')
+    }
+    const target = historicalRake.find((h) => h.id === rakeId)
+    if (!target) throw new Error('Fee entry not found.')
+
+    const updatedList = historicalRake.map((h) =>
+      h.id === rakeId ? { ...h, status: 'voided' as const, voidReason: reason } : h
+    )
+    setHistoricalRake(updatedList)
+    persist({ historicalRake: updatedList })
+
+    safeSupabaseOp((client) =>
+      client.from('rake_entries').update({
+        status: 'voided',
+        void_reason: reason,
+      }).eq('id', rakeId)
+    )
+
+    addAudit('FEE_ENTRY_VOIDED', 'historical_rake', rakeId, { reason })
+  }
+
   // 4. Add Payment
   async function addPayment(data: {
     playerId: string
@@ -1270,6 +1422,76 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     })
   }
 
+  // 5d. Edit Payment
+  async function editPayment(paymentId: string, data: {
+    playerId?: string
+    amountPaise: number
+    paidAt?: string
+    notes?: string
+    receivedByOwnerId?: string
+  }): Promise<PlayerPayment> {
+    if (data.amountPaise <= 0) {
+      throw new Error('Payment amount must be greater than zero.')
+    }
+    const target = payments.find((p) => p.id === paymentId)
+    if (!target) throw new Error('Payment not found.')
+
+    const updatedPayment: PlayerPayment = {
+      ...target,
+      playerId: data.playerId || target.playerId,
+      amountPaise: data.amountPaise,
+      paidAt: data.paidAt || target.paidAt,
+      notes: data.notes !== undefined ? data.notes : target.notes,
+      receivedByOwnerId: data.receivedByOwnerId !== undefined ? data.receivedByOwnerId : target.receivedByOwnerId,
+    }
+
+    const updatedList = payments.map((p) => (p.id === paymentId ? updatedPayment : p))
+    setPayments(updatedList)
+    persist({ payments: updatedList })
+
+    safeSupabaseOp(async (client) => {
+      try {
+        await client.from('payments').update({
+          player_id: updatedPayment.playerId,
+          amount_paise: updatedPayment.amountPaise,
+          paid_at: updatedPayment.paidAt,
+          notes: updatedPayment.notes,
+          received_by_owner_id: updatedPayment.receivedByOwnerId || null,
+        }).eq('id', paymentId)
+      } catch (e) {
+        console.warn('Could not update payment in Supabase:', e)
+      }
+    })
+
+    addAudit('PAYMENT_UPDATED', 'payment', paymentId, {
+      previousAmount: target.amountPaise,
+      newAmount: data.amountPaise,
+      playerId: updatedPayment.playerId,
+      receivedByOwnerId: updatedPayment.receivedByOwnerId,
+    })
+
+    return updatedPayment
+  }
+
+  // 5e. Delete Payment
+  async function deletePayment(paymentId: string): Promise<void> {
+    const target = payments.find((p) => p.id === paymentId)
+    if (!target) throw new Error('Payment not found.')
+
+    const updatedList = payments.filter((p) => p.id !== paymentId)
+    setPayments(updatedList)
+    persist({ payments: updatedList })
+
+    safeSupabaseOp(async (client) => {
+      await client.from('payments').delete().eq('id', paymentId)
+    })
+
+    addAudit('PAYMENT_DELETED', 'payment', paymentId, {
+      amountPaise: target.amountPaise,
+      playerId: target.playerId,
+    })
+  }
+
   // 6. Add Expense
   async function addExpense(data: {
     type: 'session_expense' | 'monthly_expense' | 'credit_adjustment'
@@ -1347,6 +1569,77 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     addAudit('EXPENSE_VOIDED', 'expense', expenseId, { reason })
   }
 
+  // 7b. Edit Expense
+  async function editExpense(expenseId: string, data: {
+    type: 'session_expense' | 'monthly_expense' | 'credit_adjustment'
+    amountPaise: number
+    description: string
+    expenseDate?: string
+    paidByOwnerId?: string
+  }): Promise<GeneralExpense> {
+    if (data.amountPaise <= 0) {
+      throw new Error('Expense amount must be greater than zero.')
+    }
+    if (!data.description || data.description.trim() === '') {
+      throw new Error('Description is required.')
+    }
+    const target = expenses.find((e) => e.id === expenseId)
+    if (!target) throw new Error('Expense not found.')
+
+    const updatedExpense: GeneralExpense = {
+      ...target,
+      type: data.type,
+      amountPaise: data.amountPaise,
+      description: data.description.trim(),
+      expenseDate: data.expenseDate || target.expenseDate,
+      paidByOwnerId: data.paidByOwnerId,
+    }
+
+    const updatedList = expenses.map((e) => (e.id === expenseId ? updatedExpense : e))
+    setExpenses(updatedList)
+    persist({ expenses: updatedList })
+
+    safeSupabaseOp(async (client) => {
+      try {
+        await client.from('expenses').update({
+          expense_type: updatedExpense.type,
+          amount_paise: updatedExpense.amountPaise,
+          description: updatedExpense.description,
+          expense_date: updatedExpense.expenseDate,
+          paid_by_owner_id: updatedExpense.paidByOwnerId || null,
+        }).eq('id', expenseId)
+      } catch (e) {
+        console.warn('Could not update expense in Supabase:', e)
+      }
+    })
+
+    addAudit('EXPENSE_UPDATED', 'expense', expenseId, {
+      description: updatedExpense.description,
+      amountPaise: updatedExpense.amountPaise,
+    })
+
+    return updatedExpense
+  }
+
+  // 7c. Delete Expense
+  async function deleteExpense(expenseId: string): Promise<void> {
+    const target = expenses.find((e) => e.id === expenseId)
+    if (!target) throw new Error('Expense not found.')
+
+    const updatedList = expenses.filter((e) => e.id !== expenseId)
+    setExpenses(updatedList)
+    persist({ expenses: updatedList })
+
+    safeSupabaseOp(async (client) => {
+      await client.from('expenses').delete().eq('id', expenseId)
+    })
+
+    addAudit('EXPENSE_DELETED', 'expense', expenseId, {
+      description: target.description,
+      amountPaise: target.amountPaise,
+    })
+  }
+
   // 8. Record Owner Settlement
   async function recordOwnerSettlement(data: {
     ownerId: string
@@ -1407,6 +1700,99 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     })
 
     return newSettlement
+  }
+
+  // 8b. Edit Owner Settlement
+  async function editOwnerSettlement(settlementId: string, data: {
+    ownerId?: string
+    amountPaise: number
+    settledAt?: string
+    notes?: string
+    paidByOwnerId?: string
+  }): Promise<OwnerSettlement> {
+    if (data.amountPaise <= 0) {
+      throw new Error('Settlement amount must be greater than zero.')
+    }
+    const target = settlements.find((s) => s.id === settlementId)
+    if (!target) throw new Error('Settlement not found.')
+
+    const updatedSettlement: OwnerSettlement = {
+      ...target,
+      ownerId: data.ownerId || target.ownerId,
+      amountPaise: data.amountPaise,
+      settledAt: data.settledAt || target.settledAt,
+      notes: data.notes !== undefined ? data.notes : target.notes,
+      paidByOwnerId: data.paidByOwnerId !== undefined ? data.paidByOwnerId : target.paidByOwnerId,
+    }
+
+    const updatedList = settlements.map((s) => (s.id === settlementId ? updatedSettlement : s))
+    setSettlements(updatedList)
+    persist({ settlements: updatedList })
+
+    safeSupabaseOp(async (client) => {
+      try {
+        await client.from('owner_settlements').update({
+          owner_id: updatedSettlement.ownerId,
+          amount_paise: updatedSettlement.amountPaise,
+          settled_at: updatedSettlement.settledAt,
+          notes: updatedSettlement.notes,
+          paid_by_owner_id: updatedSettlement.paidByOwnerId || null,
+        }).eq('id', settlementId)
+      } catch (e) {
+        console.warn('Could not update settlement in Supabase:', e)
+      }
+    })
+
+    addAudit('OWNER_SETTLEMENT_UPDATED', 'owner_settlement', settlementId, {
+      amountPaise: data.amountPaise,
+      ownerId: updatedSettlement.ownerId,
+      paidByOwnerId: updatedSettlement.paidByOwnerId,
+    })
+
+    return updatedSettlement
+  }
+
+  // 8c. Delete Owner Settlement
+  async function deleteOwnerSettlement(settlementId: string): Promise<void> {
+    const target = settlements.find((s) => s.id === settlementId)
+    if (!target) throw new Error('Settlement not found.')
+
+    const updatedList = settlements.filter((s) => s.id !== settlementId)
+    setSettlements(updatedList)
+    persist({ settlements: updatedList })
+
+    safeSupabaseOp(async (client) => {
+      await client.from('owner_settlements').delete().eq('id', settlementId)
+    })
+
+    addAudit('OWNER_SETTLEMENT_DELETED', 'owner_settlement', settlementId, {
+      amountPaise: target.amountPaise,
+      ownerId: target.ownerId,
+    })
+  }
+
+  // 8d. Void Owner Settlement
+  async function voidOwnerSettlement(settlementId: string, reason: string): Promise<void> {
+    if (!reason || reason.trim() === '') {
+      throw new Error('A reason is required to void a settlement.')
+    }
+    const target = settlements.find((s) => s.id === settlementId)
+    if (!target) throw new Error('Settlement not found.')
+
+    const updatedList = settlements.map((s) =>
+      s.id === settlementId ? { ...s, status: 'voided' as const, voidReason: reason } : s
+    )
+    setSettlements(updatedList)
+    persist({ settlements: updatedList })
+
+    safeSupabaseOp((client) =>
+      client.from('owner_settlements').update({
+        status: 'voided',
+        void_reason: reason,
+      }).eq('id', settlementId)
+    )
+
+    addAudit('OWNER_SETTLEMENT_VOIDED', 'owner_settlement', settlementId, { reason })
   }
 
   // 9. Update Settings
@@ -1588,6 +1974,68 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     addAudit('BUCKET_TRANSFER_VOIDED', 'bucket_transfer', transferId, {
       amountPaise: target.amountPaise,
       reason,
+    })
+  }
+
+  // 10e. Edit Bucket Transfer
+  async function editBucketTransfer(transferId: string, data: {
+    fromBucket?: 'table_recovery' | 'festival_fund'
+    toBucket?: 'table_recovery' | 'festival_fund' | 'owner_profit'
+    amountPaise: number
+    notes?: string
+    transferredAt?: string
+  }): Promise<BucketTransfer> {
+    if (data.amountPaise <= 0) {
+      throw new Error('Transfer amount must be greater than zero.')
+    }
+    const target = transfers.find((t) => t.id === transferId)
+    if (!target) throw new Error('Transfer record not found.')
+
+    const updatedTransfer: BucketTransfer = {
+      ...target,
+      fromBucket: data.fromBucket || target.fromBucket,
+      toBucket: data.toBucket || target.toBucket,
+      amountPaise: data.amountPaise,
+      notes: data.notes !== undefined ? data.notes : target.notes,
+      transferredAt: data.transferredAt || target.transferredAt,
+    }
+
+    const updatedList = transfers.map((t) => (t.id === transferId ? updatedTransfer : t))
+    setTransfers(updatedList)
+    persist({ transfers: updatedList })
+
+    safeSupabaseOp((client) =>
+      client.from('bucket_transfers').update({
+        from_bucket: updatedTransfer.fromBucket,
+        to_bucket: updatedTransfer.toBucket,
+        amount_paise: updatedTransfer.amountPaise,
+        notes: updatedTransfer.notes,
+        transferred_at: updatedTransfer.transferredAt,
+      }).eq('id', transferId)
+    )
+
+    addAudit('BUCKET_TRANSFER_UPDATED', 'bucket_transfer', transferId, {
+      amountPaise: data.amountPaise,
+    })
+
+    return updatedTransfer
+  }
+
+  // 10f. Delete Bucket Transfer
+  async function deleteBucketTransfer(transferId: string): Promise<void> {
+    const target = transfers.find((t) => t.id === transferId)
+    if (!target) throw new Error('Transfer record not found.')
+
+    const updatedList = transfers.filter((t) => t.id !== transferId)
+    setTransfers(updatedList)
+    persist({ transfers: updatedList })
+
+    safeSupabaseOp((client) =>
+      client.from('bucket_transfers').delete().eq('id', transferId)
+    )
+
+    addAudit('BUCKET_TRANSFER_DELETED', 'bucket_transfer', transferId, {
+      amountPaise: target.amountPaise,
     })
   }
 
@@ -1961,17 +2409,30 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         userEmail,
         addGame,
         voidGame,
+        deleteGame,
         addSessionExpense,
         removeSessionExpense,
         addHistoricalRake,
+        editHistoricalRake,
+        deleteHistoricalRake,
+        voidHistoricalRake,
         addPayment,
+        editPayment,
+        deletePayment,
         voidPayment,
         updatePaymentCollector,
         assignAllUnassignedPayments,
         addExpense,
+        editExpense,
+        deleteExpense,
         voidExpense,
         recordOwnerSettlement,
+        editOwnerSettlement,
+        deleteOwnerSettlement,
+        voidOwnerSettlement,
         addBucketTransfer,
+        editBucketTransfer,
+        deleteBucketTransfer,
         voidBucketTransfer,
         updateSettings,
         updateOwner,
