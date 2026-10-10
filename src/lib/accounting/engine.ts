@@ -403,20 +403,45 @@ export function calculateLedgerSummary(params: {
 
   for (const item of timeline) {
     if (item.type === 'historical') {
-      const { allocatedToTablePaise, allocatedToFestivalPaise, distributableRakePaise } = allocateRakeToBuckets(
-        item.entry.amountPaise,
-        currentTableAccumulatedPaise,
-        settings.tableRecoveryTargetPaise,
-        currentFestivalAccumulatedPaise,
-        settings.festivalFundTargetPaise
-      )
+      if (item.entry.amountPaise < 0) {
+        const deductionPaise = Math.abs(item.entry.amountPaise)
+        if (totalDistributableRakePaise >= deductionPaise) {
+          totalDistributableRakePaise -= deductionPaise
+          debitOwnersEqually(deductionPaise)
+        } else {
+          const remDeduction = deductionPaise - totalDistributableRakePaise
+          if (totalDistributableRakePaise > 0) {
+            debitOwnersEqually(totalDistributableRakePaise)
+            totalDistributableRakePaise = 0
+          }
+          if (currentTableAccumulatedPaise >= remDeduction) {
+            currentTableAccumulatedPaise -= remDeduction
+            debitOwnersEqually(remDeduction)
+          } else {
+            const afterTable = remDeduction - currentTableAccumulatedPaise
+            if (currentTableAccumulatedPaise > 0) {
+              debitOwnersEqually(currentTableAccumulatedPaise)
+              currentTableAccumulatedPaise = 0
+            }
+            currentFestivalAccumulatedPaise = Math.max(0, currentFestivalAccumulatedPaise - afterTable)
+          }
+        }
+      } else {
+        const { allocatedToTablePaise, allocatedToFestivalPaise, distributableRakePaise } = allocateRakeToBuckets(
+          item.entry.amountPaise,
+          currentTableAccumulatedPaise,
+          settings.tableRecoveryTargetPaise,
+          currentFestivalAccumulatedPaise,
+          settings.festivalFundTargetPaise
+        )
 
-      currentTableAccumulatedPaise += allocatedToTablePaise
-      currentFestivalAccumulatedPaise += allocatedToFestivalPaise
-      totalDistributableRakePaise += distributableRakePaise
+        currentTableAccumulatedPaise += allocatedToTablePaise
+        currentFestivalAccumulatedPaise += allocatedToFestivalPaise
+        totalDistributableRakePaise += distributableRakePaise
 
-      // Both Table Recovery and Profit reimburse the 4 owners equally
-      creditOwnersEqually(allocatedToTablePaise + distributableRakePaise)
+        // Both Table Recovery and Profit reimburse the 4 owners equally
+        creditOwnersEqually(allocatedToTablePaise + distributableRakePaise)
+      }
     } else if (item.type === 'transfer') {
       // Reallocate amount between buckets
       const transfer = item.entry

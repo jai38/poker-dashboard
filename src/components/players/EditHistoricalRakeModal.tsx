@@ -43,13 +43,14 @@ export const EditHistoricalRakeModal: React.FC<EditHistoricalRakeModalProps> = (
 
   if (!rakeEntry) return null
 
+  const parsedPaise = parseRupeesToPaise(amountRupees)
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    const parsedPaise = parseRupeesToPaise(amountRupees)
-    if (parsedPaise <= 0) {
-      setError('Fee amount must be greater than zero.')
+    if (parsedPaise === 0) {
+      setError('Fee amount cannot be zero. Enter a positive number for fees or negative for discounts.')
       return
     }
 
@@ -125,15 +126,23 @@ export const EditHistoricalRakeModal: React.FC<EditHistoricalRakeModalProps> = (
             <span className="absolute left-3 top-2.5 text-sm text-slate-500 font-mono">₹</span>
             <input
               type="number"
-              min="1"
               step="any"
               value={amountRupees}
               onChange={(e) => setAmountRupees(e.target.value)}
-              placeholder="e.g. 500"
+              placeholder="e.g. 500 or -500"
               className="w-full pl-8 pr-3 py-2 text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
               required
             />
           </div>
+          {parsedPaise < 0 ? (
+            <p className="text-[11px] text-amber-400">
+              Negative fee: Deducts {formatINR(Math.abs(parsedPaise))} from member total fee & debt.
+            </p>
+          ) : (
+            <p className="text-[11px] text-slate-500">
+              Tip: Enter negative amount (e.g. -500) for fee discount or rebate.
+            </p>
+          )}
         </div>
 
         {/* Entry Date */}

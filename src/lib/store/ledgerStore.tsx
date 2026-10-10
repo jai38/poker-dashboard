@@ -1092,8 +1092,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     notes?: string
     receivedByOwnerId?: string
   }) {
-    if (data.amountPaise <= 0) {
-      throw new Error('Rake amount must be greater than zero.')
+    if (data.amountPaise === 0) {
+      throw new Error('Fee amount cannot be zero.')
     }
 
     let targetPlayerId = data.playerId
@@ -1218,8 +1218,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     entryDate?: string
     notes?: string
   }): Promise<HistoricalRakeEntry> {
-    if (data.amountPaise <= 0) {
-      throw new Error('Fee amount must be greater than zero.')
+    if (data.amountPaise === 0) {
+      throw new Error('Fee amount cannot be zero.')
     }
     const target = historicalRake.find((h) => h.id === rakeId)
     if (!target) throw new Error('Fee entry not found.')

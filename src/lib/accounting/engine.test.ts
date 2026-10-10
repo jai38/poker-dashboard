@@ -1203,6 +1203,65 @@ describe('Pure Accounting Engine Specification Tests', () => {
     expect(summary.totalRakeCollectedPaise).toBe(0)
     expect(summary.totalOutstandingPaise).toBe(2000 * 100)
   })
+
+  it('Test 32: Negative historical fee entries (rebates/discounts) reduce total rake generated and adjust ledger properly', () => {
+    const owners = [
+      { id: 'o1', name: 'Owner 1', isActive: true },
+      { id: 'o2', name: 'Owner 2', isActive: true },
+    ]
+
+    const historicalRake = [
+      {
+        id: 'r1',
+        playerId: 'p1',
+        amountPaise: 5000 * 100, // ₹5,000 original fee
+        entryDate: '2026-09-01T00:00:00Z',
+        status: 'active' as const,
+      },
+      {
+        id: 'r2_discount',
+        playerId: 'p1',
+        amountPaise: -1000 * 100, // -₹1,000 fee rebate / discount
+        entryDate: '2026-09-02T00:00:00Z',
+        status: 'active' as const,
+      },
+    ]
+
+    const payments = [
+      {
+        id: 'pay1',
+        playerId: 'p1',
+        amountPaise: 2000 * 100, // ₹2,000 collected
+        paidAt: '2026-09-03T00:00:00Z',
+        status: 'active' as const,
+        receivedByOwnerId: 'o1',
+      },
+    ]
+
+    const summary = calculateLedgerSummary({
+      owners,
+      games: [],
+      historicalRake,
+      payments,
+      expenses: [],
+      settlements: [],
+      settings: {
+        ...DEFAULT_ACCOUNTING_SETTINGS,
+        tableRecoveryTargetPaise: 0,
+        festivalFundTargetPaise: 0,
+      },
+    })
+
+    // Total rake generated = ₹5,000 - ₹1,000 = ₹4,000
+    expect(summary.totalRakeGeneratedPaise).toBe(4000 * 100)
+    // Total collected = ₹2,000
+    expect(summary.totalRakeCollectedPaise).toBe(2000 * 100)
+    // Outstanding = ₹4,000 - ₹2,000 = ₹2,000
+    expect(summary.totalOutstandingPaise).toBe(2000 * 100)
+    // Owners split net distributable rake of ₹4,000 equally -> ₹2,000 each
+    expect(summary.ownerEntitlements['o1'].grossEntitlementPaise).toBe(2000 * 100)
+    expect(summary.ownerEntitlements['o2'].grossEntitlementPaise).toBe(2000 * 100)
+  })
 })
 
 

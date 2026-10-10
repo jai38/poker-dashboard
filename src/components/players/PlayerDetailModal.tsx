@@ -183,19 +183,23 @@ export const PlayerDetailModal: React.FC<PlayerDetailModalProps> = ({
                         >
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-slate-100">
+                              <span className={`font-mono font-bold ${h.amountPaise < 0 ? 'text-amber-400' : 'text-slate-100'}`}>
                                 {formatINR(h.amountPaise)}
                               </span>
                               <span
                                 className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold ${
-                                  h.entryType === 'member_transfer'
+                                  h.amountPaise < 0
+                                    ? 'bg-amber-950/80 text-amber-400 border border-amber-800/60'
+                                    : h.entryType === 'member_transfer'
                                     ? 'bg-amber-950/80 text-amber-400 border border-amber-800/60'
                                     : h.entryType === 'game' || h.gameId
                                     ? 'bg-indigo-950/80 text-indigo-400 border border-indigo-800/60'
                                     : 'bg-slate-800 text-slate-400'
                                 }`}
                               >
-                                {h.entryType === 'member_transfer'
+                                {h.amountPaise < 0
+                                  ? 'Fee Rebate / Discount'
+                                  : h.entryType === 'member_transfer'
                                   ? 'Member Transfer (Debit)'
                                   : h.entryType === 'game' || h.gameId
                                   ? 'Session Activity'

@@ -34,8 +34,8 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
     e.preventDefault()
     setError('')
 
-    if (rakePaise <= 0) {
-      setError('Fee amount must be greater than zero.')
+    if (rakePaise === 0) {
+      setError('Fee amount cannot be zero. Enter a positive amount for fees or negative (e.g. -500) for discounts/rebates.')
       return
     }
 
@@ -44,8 +44,13 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
       return
     }
 
-    if (paidPaise > rakePaise) {
+    if (rakePaise > 0 && paidPaise > rakePaise) {
       setError('Paid amount cannot exceed fee amount. Overpayment is not supported.')
+      return
+    }
+
+    if (rakePaise < 0 && paidPaise > 0) {
+      setError('Cannot record a payment against a negative fee (discount/rebate).')
       return
     }
 
@@ -54,10 +59,10 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
         playerId: selectedPlayerId || undefined,
         playerName: selectedPlayerId ? undefined : newPlayerName.trim(),
         amountPaise: rakePaise,
-        paidAmountPaise: paidPaise > 0 ? paidPaise : undefined,
+        paidAmountPaise: rakePaise > 0 && paidPaise > 0 ? paidPaise : undefined,
         entryDate: entryDate ? new Date(entryDate).toISOString() : undefined,
-        notes: notes.trim(),
-        receivedByOwnerId: paidPaise > 0 ? (receivedByOwnerId || undefined) : undefined,
+        notes: notes.trim() || (rakePaise < 0 ? 'Fee discount / rebate' : 'Manual fee entry'),
+        receivedByOwnerId: rakePaise > 0 && paidPaise > 0 ? (receivedByOwnerId || undefined) : undefined,
       })
 
       const targetPlayerName = selectedPlayerId
@@ -67,8 +72,9 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
       setSavedSuccess({
         playerName: targetPlayerName,
         rakePaise,
-        paidPaise,
+        paidPaise: rakePaise < 0 ? 0 : paidPaise,
         outstandingPaise: Math.max(0, rakePaise - paidPaise),
+        isNegative: rakePaise < 0,
       })
     } catch (err: any) {
       setError(err.message || 'Failed to save fee entry.')
@@ -88,14 +94,22 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
 
   if (savedSuccess) {
     return (
-      <Modal isOpen={isOpen} onClose={handleResetAndClose} title="Fee Entry Saved" maxWidth="md">
+      <Modal isOpen={isOpen} onClose={handleResetAndClose} title={savedSuccess.isNegative ? 'Fee Rebate Applied' : 'Fee Entry Saved'} maxWidth="md">
         <div className="space-y-5">
-          <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-300">
+          <div className={`flex items-center gap-3 p-4 rounded-xl border ${
+            savedSuccess.isNegative
+              ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+              : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+          }`}>
             <CheckCircle2 className="w-6 h-6 shrink-0" />
             <div>
-              <h4 className="font-semibold text-sm">Fee Entry Saved</h4>
-              <p className="text-xs text-emerald-400/80">
-                Added to total contributions and recovery pipeline.
+              <h4 className="font-semibold text-sm">
+                {savedSuccess.isNegative ? 'Fee Discount / Rebate Applied' : 'Fee Entry Saved'}
+              </h4>
+              <p className={`text-xs ${savedSuccess.isNegative ? 'text-amber-400/80' : 'text-emerald-400/80'}`}>
+                {savedSuccess.isNegative
+                  ? 'Deducted from member total generated fees and outstanding debt.'
+                  : 'Added to total contributions and recovery pipeline.'}
               </p>
             </div>
           </div>
@@ -106,17 +120,19 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
               <span className="font-bold text-slate-100">{savedSuccess.playerName}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-800">
-              <span className="text-slate-400">Fee Recorded:</span>
-              <span className="font-mono font-bold text-indigo-400">
+              <span className="text-slate-400">Fee Adjustment:</span>
+              <span className={`font-mono font-bold ${savedSuccess.isNegative ? 'text-amber-400' : 'text-indigo-400'}`}>
                 {formatINR(savedSuccess.rakePaise)}
               </span>
             </div>
-            <div className="flex justify-between py-1 border-b border-slate-800">
-              <span className="text-slate-400">Paid:</span>
-              <span className="font-mono font-bold text-emerald-400">
-                {formatINR(savedSuccess.paidPaise)}
-              </span>
-            </div>
+            {!savedSuccess.isNegative && (
+              <div className="flex justify-between py-1 border-b border-slate-800">
+                <span className="text-slate-400">Paid:</span>
+                <span className="font-mono font-bold text-emerald-400">
+                  {formatINR(savedSuccess.paidPaise)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between py-1">
               <span className="text-slate-400">Outstanding:</span>
               <span className="font-mono font-bold text-amber-400">
@@ -199,9 +215,8 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
               <span className="absolute left-3 top-2 text-sm font-medium text-slate-500">₹</span>
               <input
                 type="number"
-                min="1"
                 step="any"
-                placeholder="5,500"
+                placeholder="5,500 or -500"
                 value={rakeRupees}
                 onChange={(e) => {
                   setRakeRupees(e.target.value)
@@ -211,6 +226,15 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
                 required
               />
             </div>
+            {rakePaise < 0 ? (
+              <p className="text-[11px] text-amber-400">
+                Negative fee: Deducts {formatINR(Math.abs(rakePaise))} from member total fee & debt.
+              </p>
+            ) : (
+              <p className="text-[11px] text-slate-500">
+                Tip: Enter negative (e.g. -500) for fee discount or rebate.
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -223,13 +247,16 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
                 type="number"
                 min="0"
                 step="any"
-                placeholder="3,000"
-                value={paidRupees}
+                placeholder={rakePaise < 0 ? 'Disabled for discount' : '3,000'}
+                value={rakePaise < 0 ? '' : paidRupees}
+                disabled={rakePaise < 0}
                 onChange={(e) => {
                   setPaidRupees(e.target.value)
                   if (error) setError('')
                 }}
-                className="w-full pl-7 pr-3 py-2 text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+                className={`w-full pl-7 pr-3 py-2 text-sm font-mono bg-slate-950 border border-slate-800 rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 ${
+                  rakePaise < 0 ? 'opacity-40 cursor-not-allowed' : ''
+                }`}
               />
             </div>
           </div>
