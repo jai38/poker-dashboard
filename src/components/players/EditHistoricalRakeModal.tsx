@@ -135,8 +135,8 @@ export const EditHistoricalRakeModal: React.FC<EditHistoricalRakeModalProps> = (
             />
           </div>
           {parsedPaise < 0 ? (
-            <p className="text-[11px] text-amber-400">
-              Negative fee: Deducts {formatINR(Math.abs(parsedPaise))} from member total fee & debt.
+            <p className="text-[11px] text-amber-400 font-medium">
+              Negative fee: Deducts {formatINR(Math.abs(parsedPaise))} from {players.find((p) => p.id === playerId)?.name || 'this member'}'s total fee & outstanding balance.
             </p>
           ) : (
             <p className="text-[11px] text-slate-500">

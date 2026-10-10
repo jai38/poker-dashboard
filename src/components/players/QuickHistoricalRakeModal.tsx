@@ -227,8 +227,8 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
               />
             </div>
             {rakePaise < 0 ? (
-              <p className="text-[11px] text-amber-400">
-                Negative fee: Deducts {formatINR(Math.abs(rakePaise))} from member total fee & debt.
+              <p className="text-[11px] text-amber-400 font-medium">
+                Negative fee: Deducts {formatINR(Math.abs(rakePaise))} from {selectedPlayerId ? (players.find((p) => p.id === selectedPlayerId)?.name || 'this member') : (newPlayerName.trim() || 'this member')}'s total fee & outstanding balance.
               </p>
             ) : (
               <p className="text-[11px] text-slate-500">
