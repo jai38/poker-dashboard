@@ -81,3 +81,16 @@ export function localDateInputValue(date: Date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
+
+/**
+ * Serializes a form date value to an ISO string, interpreting a bare date-only
+ * `YYYY-MM-DD` as LOCAL midnight. `new Date('YYYY-MM-DD')` parses as UTC, which
+ * shifts the stored calendar date back a day for users west of UTC; appending a
+ * local time component avoids that. Falls back to now for empty input.
+ */
+export function localDateInputToISO(value?: string): string {
+  if (!value) return new Date().toISOString()
+  const parsed = value.length === 10 ? new Date(`${value}T00:00`) : new Date(value)
+  if (isNaN(parsed.getTime())) return new Date().toISOString()
+  return parsed.toISOString()
+}

@@ -393,11 +393,12 @@ export function calculateLedgerSummary(params: {
   }
 
   // Debits an amount from the owners' entitlement, drawing down each owner's
-  // distributable (equal) share first and table-recovery share second. The debit
-  // is spread as equally as possible, but any per-owner shortfall is carried to
-  // the next owner so that the exact total is removed whenever the owners
-  // collectively hold it — this keeps the owner pool and owner entitlements
-  // reconciled to the paise. For every owner the identity
+  // Debits an amount from the owners' entitlement, drawing down each owner's
+  // distributable profit (equal share, then excess share) first and table-recovery
+  // share last. The debit is spread as equally as possible, but any per-owner
+  // shortfall is carried to the next owner so that the exact total is removed
+  // whenever the owners collectively hold it — this keeps the owner pool and owner
+  // entitlements reconciled to the paise. For every owner the identity
   // grossEntitlement === tableRecoveryShare + equalShare + excessShare is preserved.
   function debitOwnersEqually(amountPaise: number) {
     if (amountPaise <= 0 || activeOwners.length === 0) return
@@ -408,11 +409,19 @@ export function calculateLedgerSummary(params: {
       const ent = list[i]
       const ownersLeft = list.length - i
       const want = Math.ceil(remaining / ownersLeft)
-      const available = ent.equalSharePaise + ent.tableRecoverySharePaise
+      // All of an owner's entitlement is drawable: profit (equal + excess) first,
+      // then table-recovery reserves. Excluding excess here would leave gross
+      // above the pool and break reconciliation once profit exceeds the equal bucket.
+      const available = ent.equalSharePaise + ent.excessSharePaise + ent.tableRecoverySharePaise
       const take = Math.min(want, available, remaining)
-      const fromEqual = Math.min(ent.equalSharePaise, take)
+      let left = take
+      const fromEqual = Math.min(ent.equalSharePaise, left)
       ent.equalSharePaise -= fromEqual
-      ent.tableRecoverySharePaise -= take - fromEqual
+      left -= fromEqual
+      const fromExcess = Math.min(ent.excessSharePaise, left)
+      ent.excessSharePaise -= fromExcess
+      left -= fromExcess
+      ent.tableRecoverySharePaise -= left
       ent.grossEntitlementPaise = Math.max(0, ent.grossEntitlementPaise - take)
       remaining -= take
     }

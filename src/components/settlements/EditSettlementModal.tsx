@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { OwnerSettlement } from '../../lib/accounting/types'
-import { parseRupeesToPaise, formatINR } from '../../lib/accounting/formatters'
+import { parseRupeesToPaise, formatINR, localDateInputToISO } from '../../lib/accounting/formatters'
 import { AlertTriangle, CheckCircle2, Edit3 } from 'lucide-react'
 
 interface EditSettlementModalProps {
@@ -65,7 +65,7 @@ export const EditSettlementModal: React.FC<EditSettlementModalProps> = ({
       await editOwnerSettlement(settlement.id, {
         ownerId,
         amountPaise: parsedPaise,
-        settledAt: settledAt ? new Date(settledAt).toISOString() : undefined,
+        settledAt: settledAt ? localDateInputToISO(settledAt) : undefined,
         notes: notes.trim(),
         paidByOwnerId: paidByOwnerId || undefined,
       })

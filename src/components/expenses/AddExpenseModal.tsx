@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
-import { parseRupeesToPaise, localDateInputValue } from '../../lib/accounting/formatters'
+import { parseRupeesToPaise, localDateInputValue, localDateInputToISO } from '../../lib/accounting/formatters'
 import { AlertTriangle } from 'lucide-react'
 
 interface AddExpenseModalProps {
@@ -44,7 +44,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
         type,
         amountPaise,
         description: description.trim(),
-        expenseDate: new Date(expenseDate).toISOString(),
+        expenseDate: localDateInputToISO(expenseDate),
         gameId: gameId || null,
         paidByOwnerId: paidByOwnerId || undefined,
       })

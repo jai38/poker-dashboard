@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
-import { parseRupeesToPaise, formatINR, localDateInputValue } from '../../lib/accounting/formatters'
+import { parseRupeesToPaise, formatINR, localDateInputValue, localDateInputToISO } from '../../lib/accounting/formatters'
 import { CheckCircle2, AlertTriangle } from 'lucide-react'
 
 interface QuickHistoricalRakeModalProps {
@@ -63,7 +63,7 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
         playerName: selectedPlayerId ? undefined : newPlayerName.trim(),
         amountPaise: rakePaise,
         paidAmountPaise: rakePaise > 0 && paidPaise > 0 ? paidPaise : undefined,
-        entryDate: entryDate ? new Date(entryDate).toISOString() : undefined,
+        entryDate: entryDate ? localDateInputToISO(entryDate) : undefined,
         notes: notes.trim() || (rakePaise < 0 ? 'Fee discount / rebate' : 'Manual fee entry'),
         receivedByOwnerId: rakePaise > 0 && paidPaise > 0 ? (receivedByOwnerId || undefined) : undefined,
       })

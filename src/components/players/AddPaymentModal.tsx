@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
-import { parseRupeesToPaise, formatINR, localDateInputValue } from '../../lib/accounting/formatters'
+import { parseRupeesToPaise, formatINR, localDateInputValue, localDateInputToISO } from '../../lib/accounting/formatters'
 import { AlertTriangle, CheckCircle2, Wallet, ArrowRightLeft, Plus, Trash2, Info } from 'lucide-react'
 
 interface AddPaymentModalProps {
@@ -129,7 +129,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         await addPayment({
           playerId: selectedPlayerId,
           amountPaise,
-          paidAt: paidAt ? new Date(paidAt).toISOString() : undefined,
+          paidAt: paidAt ? localDateInputToISO(paidAt) : undefined,
           notes: notes.trim(),
           receivedByOwnerId: receivedByOwnerId || undefined,
         })
@@ -142,7 +142,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             toBucket: 'festival_fund',
             amountPaise: festivalPaise,
             notes: `Festival Jar allocation from ${selectedPlayer?.name || 'player'} payment (received by ${receiverName})`,
-            transferredAt: paidAt ? new Date(paidAt).toISOString() : undefined,
+            transferredAt: paidAt ? localDateInputToISO(paidAt) : undefined,
             deductedFromOwnerId: receivedByOwnerId || undefined,
           })
         }
@@ -197,7 +197,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             fromPlayerId: s.playerId,
             amountPaise: parseRupeesToPaise(s.amountRupees),
           })),
-          transferDate: paidAt ? new Date(paidAt).toISOString() : undefined,
+          transferDate: paidAt ? localDateInputToISO(paidAt) : undefined,
           notes: notes.trim(),
         })
 

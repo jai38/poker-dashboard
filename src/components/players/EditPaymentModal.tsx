@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { PlayerPayment } from '../../lib/accounting/types'
-import { parseRupeesToPaise, formatINR } from '../../lib/accounting/formatters'
+import { parseRupeesToPaise, formatINR, localDateInputToISO } from '../../lib/accounting/formatters'
 import { AlertTriangle, CheckCircle2, Edit3 } from 'lucide-react'
 
 interface EditPaymentModalProps {
@@ -65,7 +65,7 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({
       await editPayment(payment.id, {
         playerId,
         amountPaise: parsedPaise,
-        paidAt: paidAt ? new Date(paidAt).toISOString() : undefined,
+        paidAt: paidAt ? localDateInputToISO(paidAt) : undefined,
         notes: notes.trim(),
         receivedByOwnerId: receivedByOwnerId || undefined,
       })

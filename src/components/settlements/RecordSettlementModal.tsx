@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
-import { parseRupeesToPaise, formatINR, localDateInputValue } from '../../lib/accounting/formatters'
+import { parseRupeesToPaise, formatINR, localDateInputValue, localDateInputToISO } from '../../lib/accounting/formatters'
 import { AlertTriangle } from 'lucide-react'
 
 interface RecordSettlementModalProps {
@@ -75,7 +75,7 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
       await recordOwnerSettlement({
         ownerId: selectedOwnerId,
         amountPaise,
-        settledAt: new Date(settledAt).toISOString(),
+        settledAt: localDateInputToISO(settledAt),
         notes: notes.trim(),
         paidByOwnerId: paidByOwnerId || undefined,
       })

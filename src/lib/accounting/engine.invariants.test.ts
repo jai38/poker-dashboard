@@ -110,6 +110,15 @@ describe('engine invariants (fuzz)', () => {
         })
       }
 
+      // Vary the waterfall targets per scenario — including 0, which forces all
+      // rake into distributable profit (equal + excess) and exercises the debit
+      // path against excess shares (regression guard for the P1 Codex finding).
+      const settings = {
+        ...DEFAULT_ACCOUNTING_SETTINGS,
+        tableRecoveryTargetPaise: [0, 100000, 6500000][ri(3)],
+        festivalFundTargetPaise: [0, 50000, 3000000][ri(3)],
+      }
+
       const summary = calculateLedgerSummary({
         owners,
         games,
@@ -118,7 +127,7 @@ describe('engine invariants (fuzz)', () => {
         expenses,
         settlements,
         bucketTransfers: transfers,
-        settings: DEFAULT_ACCOUNTING_SETTINGS,
+        settings,
       })
 
       if (!summary.reconciled) {
