@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { GeneralExpense } from '../../lib/accounting/types'
-import { parseRupeesToPaise, formatINR } from '../../lib/accounting/formatters'
+import { parseRupeesToPaise, formatINR, localDateInputToISO } from '../../lib/accounting/formatters'
 import { AlertTriangle, CheckCircle2, Edit3 } from 'lucide-react'
 
 interface EditExpenseModalProps {
@@ -66,7 +66,7 @@ export const EditExpenseModal: React.FC<EditExpenseModalProps> = ({
         type,
         amountPaise: parsedPaise,
         description: description.trim(),
-        expenseDate: expenseDate ? new Date(expenseDate).toISOString() : undefined,
+        expenseDate: expenseDate ? localDateInputToISO(expenseDate) : undefined,
         paidByOwnerId: paidByOwnerId || undefined,
       })
 

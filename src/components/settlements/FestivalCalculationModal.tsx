@@ -6,12 +6,7 @@ import {
   Sparkles,
   ArrowRightLeft,
   Info,
-  CheckCircle2,
-  Users,
-  Wallet,
   Coins,
-  ArrowRight,
-  TrendingDown,
 } from 'lucide-react'
 
 interface FestivalCalculationModalProps {
@@ -35,7 +30,6 @@ export const FestivalCalculationModal: React.FC<FestivalCalculationModalProps> =
 
   const totalInPaise = transfersIn.reduce((sum, t) => sum + t.amountPaise, 0)
   const totalOutPaise = transfersOut.reduce((sum, t) => sum + t.amountPaise, 0)
-  const netTransfersPaise = totalInPaise - totalOutPaise
 
   const dedicatedOwner = owners.find((o) => o.id === settings.festivalFundDeductedOwnerId)
 
@@ -267,13 +261,28 @@ export const FestivalCalculationModal: React.FC<FestivalCalculationModalProps> =
                   <tr className="border-t border-slate-700 text-xs font-bold bg-slate-900/50">
                     <td className="py-2 px-2 font-sans text-slate-300">Total</td>
                     <td className="py-2 px-2 text-right text-slate-300">
-                      {formatINR(summary.totalRakeCollectedPaise)}
+                      {formatINR(
+                        Object.values(summary.ownerEntitlements).reduce(
+                          (sum, e) => sum + (e.cashCollectedPaise || 0),
+                          0
+                        )
+                      )}
                     </td>
                     <td className="py-2 px-2 text-right text-purple-400">
-                      -{formatINR(summary.festivalFundAccumulatedPaise)}
+                      -{formatINR(
+                        Object.values(summary.ownerEntitlements).reduce(
+                          (sum, e) => sum + (e.festivalFundDepositedPaise || 0),
+                          0
+                        )
+                      )}
                     </td>
                     <td className="py-2 px-2 text-right text-slate-400">
-                      -{formatINR(summary.totalAllExpensesPaise)}
+                      -{formatINR(
+                        Object.values(summary.ownerEntitlements).reduce(
+                          (sum, e) => sum + (e.expensesPaidPaise || 0),
+                          0
+                        )
+                      )}
                     </td>
                     <td className="py-2 px-2 text-right text-emerald-400 font-sans">
                       {formatINR(

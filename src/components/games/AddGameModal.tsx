@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
-import { parseRupeesToPaise, formatINR } from '../../lib/accounting/formatters'
+import { parseRupeesToPaise, formatINR, localDateTimeInputValue } from '../../lib/accounting/formatters'
 import { SessionExpense } from '../../lib/accounting/types'
 import {
   Plus,
@@ -32,10 +32,17 @@ interface GamePlayerRow {
   receivedByOwnerId: string
 }
 
+interface ExpenseDraft {
+  id: string
+  amountInput: string // raw rupee string, kept verbatim while typing
+  description: string
+  paidByOwnerId?: string
+}
+
 export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) => {
   const { owners, players, summary, settings, addGame } = useLedger()
 
-  const [playedAt, setPlayedAt] = useState<string>(new Date().toISOString().slice(0, 16))
+  const [playedAt, setPlayedAt] = useState<string>(localDateTimeInputValue())
   const [hostOwnerId, setHostOwnerId] = useState<string>(owners[0]?.id || '')
   const [grossRakeInput, setGrossRakeInput] = useState<string>('')
   const [attendance, setAttendance] = useState<Record<string, boolean>>(() => {
@@ -55,16 +62,17 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
   const [playerRows, setPlayerRows] = useState<GamePlayerRow[]>([])
 
   // Session expenses: default paid by hosting organizer
-  const [expenses, setExpenses] = useState<SessionExpense[]>([
+  const [expenses, setExpenses] = useState<ExpenseDraft[]>([
     {
       id: `exp-draft-${Date.now()}-0`,
-      amountPaise: 0,
+      amountInput: '',
       description: 'Refreshments / Venue / Supplies',
       paidByOwnerId: owners[0]?.id || '',
     },
   ])
   const [notes, setNotes] = useState<string>('')
   const [error, setError] = useState<string>('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [savedSuccess, setSavedSuccess] = useState<any | null>(null)
 
   // Calculate member rows sum
@@ -73,9 +81,18 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
     0
   )
 
-  const grossRakePaise = parseRupeesToPaise(grossRakeInput)
+  // Clamp at zero: a negative gross fee is invalid and would otherwise throw
+  // inside the accounting engine during render (blanking the screen).
+  const grossRakePaise = Math.max(0, parseRupeesToPaise(grossRakeInput))
 
-  const activeExpenses = expenses.filter((e) => e.amountPaise > 0)
+  const activeExpenses: SessionExpense[] = expenses
+    .map((e) => ({
+      id: e.id,
+      amountPaise: parseRupeesToPaise(e.amountInput),
+      description: e.description,
+      paidByOwnerId: e.paidByOwnerId,
+    }))
+    .filter((e) => e.amountPaise > 0)
   const { netRakePaise, totalExpensePaise, uncoveredExpensePaise } = calculateGameNetRake(
     grossRakePaise,
     activeExpenses
@@ -100,11 +117,10 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
   if (projectedAlloc.distributableRakePaise > 0 && presentCount > 0) {
     try {
       const res = calculateOwnerDistribution({
-        distributableRakePaake: projectedAlloc.distributableRakePaise,
         distributableRakePaise: projectedAlloc.distributableRakePaise,
         owners: ownerAttendanceList,
         settings,
-      } as any)
+      })
       projectedDistributions = res.ownerDistributions
     } catch {
       projectedDistributions = {}
@@ -177,7 +193,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
       ...prev,
       {
         id: `exp-draft-${Date.now()}-${prev.length}`,
-        amountPaise: 0,
+        amountInput: '',
         description: '',
         paidByOwnerId: hostOwnerId,
       },
@@ -199,7 +215,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
         if (field === 'description') {
           return { ...e, description: value }
         } else if (field === 'rupees') {
-          return { ...e, amountPaise: parseRupeesToPaise(value) }
+          return { ...e, amountInput: value }
         } else {
           return { ...e, paidByOwnerId: value || undefined }
         }
@@ -210,6 +226,8 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (isSubmitting) return
 
     if (grossRakePaise <= 0) {
       setError('Gross fee must be greater than zero.')
@@ -245,6 +263,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
     }
 
     try {
+      setIsSubmitting(true)
       const newGame = await addGame({
         playedAt: new Date(playedAt).toISOString(),
         grossRakePaise,
@@ -273,6 +292,8 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
       })
     } catch (err: any) {
       setError(err.message || 'Failed to save session.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -282,7 +303,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
     setExpenses([
       {
         id: `exp-draft-${Date.now()}-0`,
-        amountPaise: 0,
+        amountInput: '',
         description: 'Refreshments / Venue / Supplies',
         paidByOwnerId: hostOwnerId,
       },
@@ -727,8 +748,9 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
                     <input
                       type="number"
                       min="0"
+                      step="0.01"
                       placeholder="0"
-                      value={expense.amountPaise ? expense.amountPaise / 100 : ''}
+                      value={expense.amountInput}
                       onChange={(e) => handleExpenseChange(idx, 'rupees', e.target.value)}
                       className="w-full pl-6 pr-2 py-1.5 text-xs font-mono bg-slate-900 border border-slate-800 rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 text-right"
                     />
@@ -847,9 +869,10 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({ isOpen, onClose }) =
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors"
+              disabled={isSubmitting}
+              className="px-5 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Confirm & Save Session
+              {isSubmitting ? 'Saving…' : 'Confirm & Save Session'}
             </button>
           </div>
         </form>

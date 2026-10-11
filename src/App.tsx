@@ -11,10 +11,11 @@ import { SettingsView } from './components/settings/SettingsView'
 import { AddGameModal } from './components/games/AddGameModal'
 import { QuickHistoricalRakeModal } from './components/players/QuickHistoricalRakeModal'
 import { LoginPage } from './components/auth/LoginPage'
+import { formatINR } from './lib/accounting/formatters'
 import { ShieldCheck, Database } from 'lucide-react'
 
 const LedgerAppContent: React.FC = () => {
-  const { isOnlineMode, isAuthenticated } = useLedger()
+  const { isOnlineMode, isAuthenticated, summary } = useLedger()
 
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard')
   const [isAddGameOpen, setIsAddGameOpen] = useState(false)
@@ -68,9 +69,16 @@ const LedgerAppContent: React.FC = () => {
             <span>•</span>
             <span>Personal Club Accounting</span>
             <span>•</span>
-            <span className="flex items-center gap-1 text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5" /> Reconciled & Balanced
-            </span>
+            {summary.reconciled ? (
+              <span className="flex items-center gap-1 text-emerald-400">
+                <ShieldCheck className="w-3.5 h-3.5" /> Reconciled &amp; Balanced
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-rose-400">
+                <ShieldCheck className="w-3.5 h-3.5" /> Reconciliation off by{' '}
+                {formatINR(Math.abs(summary.reconciliationDiffPaise))}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-4">

@@ -1,7 +1,18 @@
 import React from 'react'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { formatDateTime } from '../../lib/accounting/formatters'
-import { History, ShieldCheck } from 'lucide-react'
+import { History } from 'lucide-react'
+
+// Render audit metadata as readable "key: value" pairs. Nested objects/arrays are
+// compact-JSON-encoded (no key stripping, so values stay intact on every screen).
+function formatMetadata(metadata?: Record<string, any>): string {
+  if (!metadata) return '-'
+  const entries = Object.entries(metadata)
+  if (entries.length === 0) return '-'
+  return entries
+    .map(([k, v]) => `${k}: ${v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+    .join(' · ')
+}
 
 export const AuditLogView: React.FC = () => {
   const { auditLog } = useLedger()
@@ -69,7 +80,7 @@ export const AuditLogView: React.FC = () => {
                 </div>
                 {entry.metadata && Object.keys(entry.metadata).length > 0 && (
                   <div className="p-2 bg-slate-950/70 rounded border border-slate-800/60 text-[11px] font-mono text-slate-300 break-words">
-                    {JSON.stringify(entry.metadata, null, 1).replace(/[{\n}]/g, '').trim()}
+                    {formatMetadata(entry.metadata)}
                   </div>
                 )}
               </div>
@@ -97,7 +108,7 @@ export const AuditLogView: React.FC = () => {
                   <td className="py-3 px-4 font-sans">{getActionBadge(entry.action)}</td>
                   <td className="py-3 px-4 text-slate-300 font-sans">{entry.entityType}</td>
                   <td className="py-3 px-4 text-slate-300 text-[11px] max-w-md break-words">
-                    {entry.metadata ? JSON.stringify(entry.metadata) : '-'}
+                    {formatMetadata(entry.metadata)}
                   </td>
                 </tr>
               ))}

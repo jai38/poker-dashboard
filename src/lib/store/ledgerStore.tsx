@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   calculateLedgerSummary,
@@ -366,8 +366,6 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [settlements, setSettlements] = useState<OwnerSettlement[]>([])
   const [transfers, setTransfers] = useState<BucketTransfer[]>([])
   const AUTH_SESSION_KEY = 'activity_ledger_auth_session'
-  const ADMIN_USER = 'admin'
-  const ADMIN_PASS = 'AdminPass2026!'
 
   const [settings, setSettings] = useState<AccountingSettings>(DEFAULT_ACCOUNTING_SETTINGS)
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([])
@@ -393,22 +391,26 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return null
   })
 
+  // Mirror of the latest state so async callbacks (e.g. the realtime refetch,
+  // which captures the mount-time closure) can read current values instead of
+  // stale ones when merging unsynced local rows against the cloud snapshot.
+  const stateRef = useRef({ owners, players, games, historicalRake, payments, expenses, settlements, transfers })
+  useEffect(() => {
+    stateRef.current = { owners, players, games, historicalRake, payments, expenses, settlements, transfers }
+  })
+
+  // When true, realtime refetches are paused so a bulk local mutation (e.g. a
+  // full database clear) isn't partially overwritten by change events arriving
+  // mid-operation.
+  const suppressFetchRef = useRef(false)
+
   // Load state on mount (Cloud Supabase first if configured, LocalStorage cache as fallback)
   useEffect(() => {
+    let channel: ReturnType<SupabaseClient['channel']> | null = null
+    let cancelled = false
+
     async function init() {
       setIsLoading(true)
-
-      // 0. Verify local auth session
-      try {
-        const session = localStorage.getItem(AUTH_SESSION_KEY)
-        if (session) {
-          const parsed = JSON.parse(session)
-          setIsAuthenticated(true)
-          setUserEmail(parsed.user || 'admin')
-        }
-      } catch {
-        // ignore
-      }
 
       // 1. Check local storage cache first to display immediately
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -430,39 +432,69 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       }
 
-      // 2. If Supabase is configured, pull the authoritative remote database
+      // 2. If Supabase is configured, authentication is driven by the real
+      //    Supabase session. Row Level Security requires a signed-in user, so an
+      //    unauthenticated visitor sees only the login screen and no cloud data.
       if (isSupabaseConfigured && supabase) {
         const client = supabase
         try {
           const { data: { session } } = await client.auth.getSession()
+          if (cancelled) return
           if (session?.user) {
             setIsAuthenticated(true)
             setUserEmail(session.user.email || null)
+            try {
+              localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ user: session.user.email, loggedInAt: Date.now() }))
+            } catch {
+              // ignore
+            }
+            await fetchCloudState()
+          } else {
+            // No valid cloud session: require login, do not trust a stale local flag.
+            setIsAuthenticated(false)
+            setUserEmail(null)
+            try {
+              localStorage.removeItem(AUTH_SESSION_KEY)
+            } catch {
+              // ignore
+            }
           }
 
-          await fetchCloudState()
+          // Keep auth state in sync with Supabase (token refresh, sign-out elsewhere).
+          client.auth.onAuthStateChange((_event, newSession) => {
+            if (newSession?.user) {
+              setIsAuthenticated(true)
+              setUserEmail(newSession.user.email || null)
+            } else {
+              setIsAuthenticated(false)
+              setUserEmail(null)
+            }
+          })
 
           // Subscribe to Supabase Realtime for automatic multi-device synchronization
-          const channel = client
+          channel = client
             .channel('public:ledger_live_sync')
             .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+              if (suppressFetchRef.current) return
               fetchCloudState()
             })
             .subscribe()
-
-          setIsLoading(false)
-          return () => {
-            client.removeChannel(channel)
-          }
         } catch (e) {
           console.warn('Supabase fetch failed, continuing with local storage:', e)
         }
       }
 
-      setIsLoading(false)
+      if (!cancelled) setIsLoading(false)
     }
 
     init()
+
+    return () => {
+      cancelled = true
+      if (channel && supabase) {
+        supabase.removeChannel(channel)
+      }
+    }
   }, [])
 
   async function fetchCloudState() {
@@ -495,7 +527,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(100),
       ])
 
-      let loadedOwners = owners
+      let loadedOwners = stateRef.current.owners
       if (dbOwners && dbOwners.length > 0) {
         loadedOwners = dbOwners.map((o: any) => ({
           id: o.id,
@@ -527,7 +559,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               paidByOwnerId: e.paid_by_owner_id || undefined,
             }))
 
-          const localGame = games.find((lg) => lg.id === g.id)
+          const localGame = stateRef.current.games.find((lg) => lg.id === g.id)
           const finalGameExpenses = gameExpenses.length > 0 ? gameExpenses : (localGame?.expenses || [])
 
           const gameAttendance: OwnerAttendance[] = (dbGameOwners || [])
@@ -553,9 +585,9 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setGames(loadedGames)
       }
 
-      let loadedRake: HistoricalRakeEntry[] = historicalRake
+      let loadedRake: HistoricalRakeEntry[] = stateRef.current.historicalRake
       if (dbRake) {
-        let currentLocalHistorical: HistoricalRakeEntry[] = historicalRake
+        let currentLocalHistorical: HistoricalRakeEntry[] = stateRef.current.historicalRake
         try {
           const raw = localStorage.getItem(STORAGE_KEY)
           if (raw) {
@@ -597,6 +629,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             status: r.status,
             notes: cleanNotes || r.notes,
             voidReason: r.void_reason,
+            transferTargetPlayerId: r.transfer_target_player_id || undefined,
           }
         })
 
@@ -625,7 +658,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       let loadedPayments: PlayerPayment[] = []
       if (dbPayments) {
         // Read current local payments from state/localStorage to preserve receivedByOwnerId if Supabase column is missing
-        let currentLocalPayments: PlayerPayment[] = payments
+        let currentLocalPayments: PlayerPayment[] = stateRef.current.payments
         try {
           const raw = localStorage.getItem(STORAGE_KEY)
           if (raw) {
@@ -649,6 +682,9 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             status: p.status,
             voidReason: p.void_reason,
             receivedByOwnerId: p.received_by_owner_id || localMatch?.receivedByOwnerId || undefined,
+            paymentType: p.payment_type || localMatch?.paymentType || 'direct',
+            transferSourcePlayerId: p.transfer_source_player_id || localMatch?.transferSourcePlayerId || undefined,
+            gameId: p.game_id || localMatch?.gameId || undefined,
           }
         })
         setPayments(loadedPayments)
@@ -687,9 +723,9 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setSettlements(loadedSettlements)
       }
 
-      let loadedTransfers: BucketTransfer[] = transfers
+      let loadedTransfers: BucketTransfer[] = stateRef.current.transfers
       if (dbTransfers) {
-        let currentLocalTransfers: BucketTransfer[] = transfers
+        let currentLocalTransfers: BucketTransfer[] = stateRef.current.transfers
         try {
           const raw = localStorage.getItem(STORAGE_KEY)
           if (raw) {
@@ -790,7 +826,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         payments: loadedPayments,
         expenses: loadedExpenses,
         settlements: loadedSettlements,
-        transfers: loadedTransfers.length > 0 ? loadedTransfers : transfers,
+        transfers: loadedTransfers.length > 0 ? loadedTransfers : stateRef.current.transfers,
         settings: loadedSettings,
         auditLog: loadedAudit,
       })
@@ -851,6 +887,12 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     localStorage.setItem(STORAGE_KEY, JSON.stringify(current))
   }
 
+  // Collision-resistant id generator: time-ordered prefix plus random suffix so
+  // rapid double-submits or concurrent devices can't mint duplicate primary keys.
+  function uid(prefix: string) {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  }
+
   function addAudit(action: string, entityType: string, entityId?: string, metadata?: Record<string, any>) {
     const entry: AuditLogEntry = {
       id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -905,14 +947,14 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const nextGameNumber = games.length > 0 ? Math.max(...games.map((g) => g.gameNumber)) + 1 : 1
     const gameExpenses: SessionExpense[] = (data.expenses || []).map((e, idx) => ({
-      id: e.id || `exp-session-${Date.now()}-${idx}`,
+      id: e.id || uid(`exp-session-${idx}`),
       description: e.description?.trim() || 'Session Expense',
       amountPaise: e.amountPaise,
       paidByOwnerId: e.paidByOwnerId || data.hostOwnerId,
     }))
 
     const newGame: GameRecord = {
-      id: `game-${Date.now()}`,
+      id: uid('game'),
       gameNumber: nextGameNumber,
       playedAt: data.playedAt,
       grossRakePaise: data.grossRakePaise,
@@ -941,7 +983,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             targetPlayerId = existing.id
           } else {
             const newP: Player = {
-              id: `player-${Date.now()}-${idx}`,
+              id: uid(`player-${idx}`),
               name: pr.playerName.trim(),
               createdAt: new Date().toISOString(),
             }
@@ -953,7 +995,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         if (targetPlayerId) {
           const rakeEntry: HistoricalRakeEntry = {
-            id: `hist-${Date.now()}-${idx}`,
+            id: uid(`hist-${idx}`),
             playerId: targetPlayerId,
             gameId: newGame.id,
             entryType: 'game',
@@ -966,13 +1008,14 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
           if (pr.isPaid) {
             newPayments.push({
-              id: `pay-${Date.now()}-${idx}`,
+              id: uid(`pay-${idx}`),
               playerId: targetPlayerId,
               amountPaise: pr.amountPaise,
               paidAt: data.playedAt,
               status: 'active',
               notes: `Game #${nextGameNumber} rake paid on the spot`,
               receivedByOwnerId: pr.receivedByOwnerId || data.hostOwnerId,
+              gameId: newGame.id,
             })
           }
         }
@@ -1071,6 +1114,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           status: 'active',
           notes: p.notes,
           received_by_owner_id: p.receivedByOwnerId || null,
+          game_id: p.gameId || null,
         }))
         await insertPaymentsBatchResilient(client, paymentRows)
       }
@@ -1107,9 +1151,18 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         : h
     )
 
+    // Void any "paid on the spot" payments that were created with this game so the
+    // fee and its payment disappear together (otherwise the player looks overpaid).
+    const updatedPayments = payments.map((p) =>
+      p.gameId === gameId && p.status === 'active'
+        ? { ...p, status: 'voided' as const, voidReason: `Voided with game: ${reason}` }
+        : p
+    )
+
     setGames(updatedGames)
     setHistoricalRake(updatedHistorical)
-    persist({ games: updatedGames, historicalRake: updatedHistorical })
+    setPayments(updatedPayments)
+    persist({ games: updatedGames, historicalRake: updatedHistorical, payments: updatedPayments })
 
     safeSupabaseOp(async (client) => {
       await client.from('games').update({
@@ -1118,6 +1171,11 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }).eq('id', gameId)
 
       await client.from('rake_entries').update({
+        status: 'voided',
+        void_reason: `Voided with game: ${reason}`,
+      }).eq('game_id', gameId)
+
+      await client.from('payments').update({
         status: 'voided',
         void_reason: `Voided with game: ${reason}`,
       }).eq('game_id', gameId)
@@ -1136,12 +1194,15 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const updatedGames = games.filter((g) => g.id !== gameId)
     const updatedHistorical = historicalRake.filter((h) => h.gameId !== gameId)
+    const updatedPayments = payments.filter((p) => p.gameId !== gameId)
 
     setGames(updatedGames)
     setHistoricalRake(updatedHistorical)
-    persist({ games: updatedGames, historicalRake: updatedHistorical })
+    setPayments(updatedPayments)
+    persist({ games: updatedGames, historicalRake: updatedHistorical, payments: updatedPayments })
 
     safeSupabaseOp(async (client) => {
+      await client.from('payments').delete().eq('game_id', gameId)
       await client.from('rake_entries').delete().eq('game_id', gameId)
       await client.from('expenses').delete().eq('game_id', gameId)
       await client.from('game_owners').delete().eq('game_id', gameId)
@@ -1166,7 +1227,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (targetGame.status === 'voided') throw new Error('Cannot add expenses to a voided game.')
 
     const newExpense: SessionExpense = {
-      id: `exp-session-${gameId}-${Date.now()}`,
+      id: uid(`exp-session-${gameId}`),
       description: expense.description.trim() || 'Session Expense',
       amountPaise: expense.amountPaise,
       paidByOwnerId: expense.paidByOwnerId,
@@ -1264,7 +1325,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         targetPlayerId = existing.id
       } else {
         const newPlayer: Player = {
-          id: `player-${Date.now()}`,
+          id: uid('player'),
           name: data.playerName.trim(),
           createdAt: new Date().toISOString(),
         }
@@ -1283,7 +1344,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     const newRake: HistoricalRakeEntry = {
-      id: `hist-${Date.now()}`,
+      id: uid('hist'),
       playerId: targetPlayerId,
       amountPaise: data.amountPaise,
       entryDate: data.entryDate || new Date().toISOString(),
@@ -1299,7 +1360,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (data.paidAmountPaise && data.paidAmountPaise > 0) {
       newPayment = {
-        id: `pay-${Date.now()}`,
+        id: uid('pay'),
         playerId: targetPlayerId,
         amountPaise: data.paidAmountPaise,
         paidAt: data.entryDate || new Date().toISOString(),
@@ -1464,7 +1525,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!player) throw new Error('Player not found.')
 
     const newPayment: PlayerPayment = {
-      id: `pay-${Date.now()}`,
+      id: uid('pay'),
       playerId: data.playerId,
       amountPaise: data.amountPaise,
       paidAt: data.paidAt || new Date().toISOString(),
@@ -1517,7 +1578,6 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const newPayments: PlayerPayment[] = []
     const newRakes: HistoricalRakeEntry[] = []
     const dateStr = data.transferDate || new Date().toISOString()
-    const now = Date.now()
 
     for (let i = 0; i < data.sources.length; i++) {
       const src = data.sources[i]
@@ -1525,8 +1585,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const fromPlayer = players.find((p) => p.id === src.fromPlayerId)
       if (!fromPlayer) throw new Error('Source member not found.')
 
-      const rakeId = `rake-transfer-${now}-${i}`
-      const payId = `pay-transfer-${now}-${i}`
+      const rakeId = uid(`rake-transfer-${i}`)
+      const payId = uid(`pay-transfer-${i}`)
 
       // Deduction (fee entry) for the source member
       const rakeEntry: HistoricalRakeEntry = {
@@ -1576,6 +1636,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           entry_date: r.entryDate,
           notes: r.notes,
           status: 'active',
+          transfer_target_player_id: r.transferTargetPlayerId || null,
         })
       }
       for (const p of newPayments) {
@@ -1586,6 +1647,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           paid_at: p.paidAt,
           notes: p.notes,
           status: 'active',
+          payment_type: 'member_transfer',
+          transfer_source_player_id: p.transferSourcePlayerId || null,
         })
       }
     })
@@ -1769,7 +1832,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     const newExpense: GeneralExpense = {
-      id: `exp-${Date.now()}`,
+      id: uid('exp'),
       type: data.type,
       amountPaise: data.amountPaise,
       description: data.description.trim(),
@@ -1926,7 +1989,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     const newSettlement: OwnerSettlement = {
-      id: `set-${Date.now()}`,
+      id: uid('set'),
       ownerId: data.ownerId,
       amountPaise: data.amountPaise,
       settledAt: data.settledAt || new Date().toISOString(),
@@ -1975,6 +2038,21 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     const target = settlements.find((s) => s.id === settlementId)
     if (!target) throw new Error('Settlement not found.')
+
+    // Mirror the create-path guard: a settlement cannot exceed the owner's
+    // remaining entitlement. The current settlement already counts against that
+    // remaining, so add it back when the owner is unchanged.
+    const nextOwnerId = data.ownerId || target.ownerId
+    const ownerEnt = summary.ownerEntitlements[nextOwnerId]
+    const remaining = ownerEnt?.remainingEntitlementPaise || 0
+    const allowed = remaining + (nextOwnerId === target.ownerId ? target.amountPaise : 0)
+    if (data.amountPaise > allowed) {
+      throw new Error(
+        `Settlement amount (₹${(data.amountPaise / 100).toLocaleString()}) exceeds owner's remaining entitlement (₹${(
+          allowed / 100
+        ).toLocaleString()}).`
+      )
+    }
 
     const updatedSettlement: OwnerSettlement = {
       ...target,
@@ -2162,11 +2240,14 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     const currentTable = summary.tableRecoveryAccumulatedPaise
+    const currentDistributable = summary.totalDistributableRakePaise
     const currentFestival = summary.festivalFundAccumulatedPaise
 
-    if (data.fromBucket === 'table_recovery' && data.amountPaise > currentTable) {
+    // Table-recovery reserves plus distributable profit together form the owner
+    // pool a table-sourced transfer can draw from (matches the accounting engine).
+    if (data.fromBucket === 'table_recovery' && data.amountPaise > currentTable + currentDistributable) {
       throw new Error(
-        `Cannot transfer ₹${(data.amountPaise / 100).toLocaleString('en-IN')}: Current Table Recovery balance is ₹${(currentTable / 100).toLocaleString('en-IN')}.`
+        `Cannot transfer ₹${(data.amountPaise / 100).toLocaleString('en-IN')}: available owner pool (table recovery + profit) is ₹${((currentTable + currentDistributable) / 100).toLocaleString('en-IN')}.`
       )
     }
     if (data.fromBucket === 'festival_fund' && data.amountPaise > currentFestival) {
@@ -2176,7 +2257,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     const newTransfer: BucketTransfer = {
-      id: `transfer-${Date.now()}`,
+      id: uid('transfer'),
       transferredAt: data.transferredAt || new Date().toISOString(),
       fromBucket: data.fromBucket,
       toBucket: data.toBucket,
@@ -2249,6 +2330,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     amountPaise: number
     notes?: string
     transferredAt?: string
+    deductedFromOwnerId?: string
   }): Promise<BucketTransfer> {
     if (data.amountPaise <= 0) {
       throw new Error('Transfer amount must be greater than zero.')
@@ -2263,6 +2345,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       amountPaise: data.amountPaise,
       notes: data.notes !== undefined ? data.notes : target.notes,
       transferredAt: data.transferredAt || target.transferredAt,
+      deductedFromOwnerId:
+        data.deductedFromOwnerId !== undefined ? data.deductedFromOwnerId || undefined : target.deductedFromOwnerId,
     }
 
     const updatedList = transfers.map((t) => (t.id === transferId ? updatedTransfer : t))
@@ -2276,6 +2360,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         amount_paise: updatedTransfer.amountPaise,
         notes: updatedTransfer.notes,
         transferred_at: updatedTransfer.transferredAt,
+        deducted_from_owner_id: updatedTransfer.deductedFromOwnerId || null,
       }).eq('id', transferId)
     )
 
@@ -2344,17 +2429,23 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cleared))
 
+    // Pause realtime refetches while the cascade of deletes runs so an in-flight
+    // change event can't repopulate the UI from rows that aren't deleted yet.
+    suppressFetchRef.current = true
     safeSupabaseOp(async (client) => {
-      await Promise.all([
-        client.from('payments').delete().neq('id', 'dummy_id_never_matches'),
-        client.from('rake_entries').delete().neq('id', 'dummy_id_never_matches'),
-        client.from('expenses').delete().neq('id', 'dummy_id_never_matches'),
-        client.from('owner_settlements').delete().neq('id', 'dummy_id_never_matches'),
-        client.from('game_owners').delete().neq('game_id', 'dummy_id_never_matches'),
-        client.from('games').delete().neq('id', 'dummy_id_never_matches'),
-        client.from('bucket_transfers').delete().neq('id', 'dummy_id_never_matches'),
-        client.from('players').delete().neq('id', 'dummy_id_never_matches'),
-      ])
+      try {
+        // Delete in dependency order (children before parents) to respect FKs.
+        await client.from('payments').delete().neq('id', 'dummy_id_never_matches')
+        await client.from('rake_entries').delete().neq('id', 'dummy_id_never_matches')
+        await client.from('expenses').delete().neq('id', 'dummy_id_never_matches')
+        await client.from('owner_settlements').delete().neq('id', 'dummy_id_never_matches')
+        await client.from('game_owners').delete().neq('game_id', 'dummy_id_never_matches')
+        await client.from('bucket_transfers').delete().neq('id', 'dummy_id_never_matches')
+        await client.from('games').delete().neq('id', 'dummy_id_never_matches')
+        await client.from('players').delete().neq('id', 'dummy_id_never_matches')
+      } finally {
+        suppressFetchRef.current = false
+      }
     })
   }
 
@@ -2429,6 +2520,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           notes: r.notes,
           status: r.status,
           void_reason: r.voidReason,
+          transfer_target_player_id: r.transferTargetPlayerId || null,
         })
       }
     }
@@ -2444,6 +2536,9 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         status: p.status,
         void_reason: p.voidReason,
         received_by_owner_id: p.receivedByOwnerId || null,
+        payment_type: p.paymentType || 'direct',
+        transfer_source_player_id: p.transferSourcePlayerId || null,
+        game_id: p.gameId || null,
       }))
       const { error: pErr } = await client.from('payments').upsert(pRows)
       if (pErr && (pErr.code === '42703' || pErr.code === 'PGRST204' || pErr.message?.includes('received_by_owner_id'))) {
@@ -2519,6 +2614,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           notes: t.notes,
           status: t.status,
           void_reason: t.voidReason,
+          deducted_from_owner_id: t.deductedFromOwnerId || null,
         }))
       )
     }
@@ -2529,60 +2625,83 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       { key: 'festival_fund_target', value: { amount_paise: settings.festivalFundTargetPaise } },
       { key: 'equal_distribution_threshold', value: { amount_paise: settings.equalDistributionThresholdPaise } },
       { key: 'absent_owner_percentage', value: { percentage: settings.absentOwnerPercentage } },
+      { key: 'festival_fund_deducted_owner_id', value: { owner_id: settings.festivalFundDeductedOwnerId || null } },
     ])
   }
 
   // 12. CSV Export
   function exportCSV(type: 'summary' | 'players' | 'games' | 'payments' | 'expenses' | 'settlements') {
-    let filename = `activity-ledger-${type}-${new Date().toISOString().split('T')[0]}.csv`
+    const filename = `activity-ledger-${type}-${new Date().toISOString().split('T')[0]}.csv`
     let csvContent = ''
 
+    // CSV cell encoder: numbers stay numeric; strings are quoted, inner quotes
+    // doubled, and any leading =, +, -, @ (spreadsheet formula triggers) are
+    // neutralized so a crafted name/note can't execute in Excel/Sheets.
+    const cell = (value: string | number | null | undefined): string => {
+      if (typeof value === 'number') return String(value)
+      let s = String(value ?? '')
+      if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
+      return `"${s.replace(/"/g, '""')}"`
+    }
+    const row = (...cells: (string | number | null | undefined)[]) => cells.map(cell).join(',') + '\n'
+    const playerName = (id: string) => players.find((p) => p.id === id)?.name || id
+    const ownerName = (id: string) => owners.find((o) => o.id === id)?.name || id
+    const rupees = (paise: number) => paise / 100
+
     if (type === 'players') {
-      csvContent = 'Member Name,Total Fees Generated (INR),Total Paid (INR),Outstanding (INR)\n'
+      csvContent = row('Member Name', 'Total Fees Generated (INR)', 'Total Paid (INR)', 'Outstanding (INR)', 'Credit (INR)')
       for (const p of players) {
+        // Align with the engine: exclude member-transfer and game-linked attribution
+        // entries so this reconciles with the dashboard "Total Fees Generated".
         const gen = historicalRake
-          .filter((h) => h.playerId === p.id && h.status === 'active')
-          .reduce((s, h) => s + h.amountPaise, 0) / 100
+          .filter((h) => h.playerId === p.id && h.status === 'active' && !h.gameId && h.entryType !== 'member_transfer')
+          .reduce((s, h) => s + h.amountPaise, 0)
         const paid = payments
-          .filter((pay) => pay.playerId === p.id && pay.status === 'active')
-          .reduce((s, pay) => s + pay.amountPaise, 0) / 100
-        const out = Math.max(0, gen - paid)
-        csvContent += `"${p.name}",${gen},${paid},${out}\n`
+          .filter((pay) => pay.playerId === p.id && pay.status === 'active' && pay.paymentType !== 'member_transfer')
+          .reduce((s, pay) => s + pay.amountPaise, 0)
+        const outstanding = Math.max(0, gen - paid)
+        const credit = Math.max(0, paid - gen)
+        csvContent += row(p.name, rupees(gen), rupees(paid), rupees(outstanding), rupees(credit))
       }
     } else if (type === 'games') {
-      csvContent = 'Game #,Date,Status,Gross Rake (INR),Expenses (INR),Net Rake (INR),Table Alloc (INR),Festival Alloc (INR),Distributable (INR)\n'
+      csvContent = row('Game #', 'Date', 'Status', 'Gross Rake (INR)', 'Expenses (INR)', 'Net Rake (INR)', 'Table Alloc (INR)', 'Festival Alloc (INR)', 'Distributable (INR)')
+      // gameResults only contains active games; include voided games explicitly so status is accurate.
       for (const g of summary.gameResults) {
-        csvContent += `${g.gameNumber},"${new Date(g.playedAt).toLocaleDateString()}",active,${g.grossRakePaise / 100},${g.totalExpensePaise / 100},${g.netRakePaise / 100},${g.tableRecoveryAllocatedPaise / 100},${g.festivalFundAllocatedPaise / 100},${g.distributableRakePaise / 100}\n`
+        csvContent += row(g.gameNumber, new Date(g.playedAt).toLocaleDateString(), 'active', rupees(g.grossRakePaise), rupees(g.totalExpensePaise), rupees(g.netRakePaise), rupees(g.tableRecoveryAllocatedPaise), rupees(g.festivalFundAllocatedPaise), rupees(g.distributableRakePaise))
+      }
+      for (const g of games.filter((gm) => gm.status === 'voided')) {
+        const exp = (g.expenses || []).reduce((s, e) => s + e.amountPaise, 0)
+        csvContent += row(g.gameNumber, new Date(g.playedAt).toLocaleDateString(), 'voided', rupees(g.grossRakePaise), rupees(exp), 0, 0, 0, 0)
       }
     } else if (type === 'expenses') {
-      csvContent = 'Date,Type,Description,Amount (INR),Game ID,Status\n'
+      csvContent = row('Date', 'Type', 'Description', 'Amount (INR)', 'Game ID', 'Status')
       for (const e of expenses) {
-        csvContent += `"${new Date(e.expenseDate).toLocaleDateString()}",${e.type},"${e.description.replace(/"/g, '""')}",${e.amountPaise / 100},${e.gameId || 'None'},${e.status}\n`
+        csvContent += row(new Date(e.expenseDate).toLocaleDateString(), e.type, e.description, rupees(e.amountPaise), e.gameId || 'None', e.status)
       }
     } else if (type === 'payments') {
-      csvContent = 'Date,Player ID,Amount (INR),Notes,Status\n'
+      csvContent = row('Date', 'Member', 'Amount (INR)', 'Type', 'Notes', 'Status')
       for (const p of payments) {
-        csvContent += `"${new Date(p.paidAt).toLocaleDateString()}",${p.playerId},${p.amountPaise / 100},"${(p.notes || '').replace(/"/g, '""')}",${p.status}\n`
+        csvContent += row(new Date(p.paidAt).toLocaleDateString(), playerName(p.playerId), rupees(p.amountPaise), p.paymentType || 'direct', p.notes || '', p.status)
       }
     } else if (type === 'settlements') {
-      csvContent = 'Date,Owner ID,Amount (INR),Notes,Status\n'
+      csvContent = row('Date', 'Owner', 'Amount (INR)', 'Notes', 'Status')
       for (const s of settlements) {
-        csvContent += `"${new Date(s.settledAt).toLocaleDateString()}",${s.ownerId},${s.amountPaise / 100},"${(s.notes || '').replace(/"/g, '""')}",${s.status}\n`
+        csvContent += row(new Date(s.settledAt).toLocaleDateString(), ownerName(s.ownerId), rupees(s.amountPaise), s.notes || '', s.status)
       }
     } else {
       // Summary
-      csvContent = 'Metric,Amount (INR)\n'
-      csvContent += `Total Rake Generated,${summary.totalRakeGeneratedPaise / 100}\n`
-      csvContent += `Total Rake Collected,${summary.totalRakeCollectedPaise / 100}\n`
-      csvContent += `Total Outstanding,${summary.totalOutstandingPaise / 100}\n`
-      csvContent += `Table Recovery Accumulated,${summary.tableRecoveryAccumulatedPaise / 100}\n`
-      csvContent += `Table Recovery Target,${summary.tableRecoveryTargetPaise / 100}\n`
-      csvContent += `Festival Fund Accumulated,${summary.festivalFundAccumulatedPaise / 100}\n`
-      csvContent += `Festival Fund Target,${summary.festivalFundTargetPaise / 100}\n`
-      csvContent += `Total Distributable Rake,${summary.totalDistributableRakePaise / 100}\n`
-      csvContent += `Total Owner Entitlement,${summary.totalOwnerEntitlementPaise / 100}\n`
-      csvContent += `Total Owner Settled,${summary.totalOwnerSettledPaise / 100}\n`
-      csvContent += `Remaining Owner Settlement,${summary.remainingOwnerSettlementPaise / 100}\n`
+      csvContent = row('Metric', 'Amount (INR)')
+      csvContent += row('Total Rake Generated', rupees(summary.totalRakeGeneratedPaise))
+      csvContent += row('Total Rake Collected', rupees(summary.totalRakeCollectedPaise))
+      csvContent += row('Total Outstanding', rupees(summary.totalOutstandingPaise))
+      csvContent += row('Table Recovery Accumulated', rupees(summary.tableRecoveryAccumulatedPaise))
+      csvContent += row('Table Recovery Target', rupees(summary.tableRecoveryTargetPaise))
+      csvContent += row('Festival Fund Accumulated', rupees(summary.festivalFundAccumulatedPaise))
+      csvContent += row('Festival Fund Target', rupees(summary.festivalFundTargetPaise))
+      csvContent += row('Total Distributable Rake', rupees(summary.totalDistributableRakePaise))
+      csvContent += row('Total Owner Entitlement', rupees(summary.totalOwnerEntitlementPaise))
+      csvContent += row('Total Owner Settled', rupees(summary.totalOwnerSettledPaise))
+      csvContent += row('Remaining Owner Settlement', rupees(summary.remainingOwnerSettlementPaise))
     }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -2593,48 +2712,38 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
-  // 13. Auth
+  // 13. Auth — real Supabase Auth only. There is no client-side password; access
+  // is enforced server-side by Row Level Security, so credentials never ship in
+  // the bundle and nothing is leaked back to the browser on failure.
   async function signIn(email: string, pass: string) {
-    const trimmedUser = email.trim().toLowerCase()
-    const trimmedPass = pass.trim()
+    const trimmedUser = email.trim()
 
-    // 1. Try Supabase cloud auth if configured
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password: pass,
-      })
-      if (!error && data.session) {
-        setIsAuthenticated(true)
-        setUserEmail(data.session.user.email || trimmedUser)
-        try {
-          localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ user: data.session.user.email || trimmedUser, loggedInAt: Date.now() }))
-        } catch {
-          // ignore
-        }
-        return { error: null }
-      }
+    if (!isSupabaseConfigured || !supabase) {
+      return { error: new Error('Cloud database is not configured. Add your Supabase project in Settings → Database before signing in.') }
     }
 
-    // 2. Validate against admin credentials
-    const isAuthorizedAdmin =
-      (trimmedUser === 'admin' || trimmedUser === 'admin@ledger.local' || trimmedUser === 'admin@activityledger.local') &&
-      trimmedPass === 'AdminPass2026!'
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: trimmedUser,
+      password: pass,
+    })
 
-    if (isAuthorizedAdmin) {
-      setIsAuthenticated(true)
-      setUserEmail(email.trim())
-      try {
-        localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ user: email.trim(), loggedInAt: Date.now() }))
-      } catch {
-        // ignore
-      }
-      return { error: null }
+    if (error || !data.session) {
+      return { error: new Error(error?.message || 'Invalid email or password.') }
     }
 
-    return { error: new Error('Invalid username or password. Authorized admin: admin / AdminPass2026!') }
+    setIsAuthenticated(true)
+    setUserEmail(data.session.user.email || trimmedUser)
+    try {
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ user: data.session.user.email || trimmedUser, loggedInAt: Date.now() }))
+    } catch {
+      // ignore
+    }
+    // Pull the authoritative ledger now that we have an authenticated session.
+    await fetchCloudState()
+    return { error: null }
   }
 
   async function signOut() {

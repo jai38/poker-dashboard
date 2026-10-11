@@ -3,7 +3,7 @@ import { useLedger } from '../../lib/store/ledgerStore'
 import { parseRupeesToPaise } from '../../lib/accounting/formatters'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { DatabaseConfigCard } from './DatabaseConfigCard'
-import { Settings, ShieldAlert, RotateCcw, Save, AlertTriangle, Users, CheckCircle2, Trash2 } from 'lucide-react'
+import { Settings, RotateCcw, Save, AlertTriangle, Users, CheckCircle2, Trash2 } from 'lucide-react'
 
 export const SettingsView: React.FC = () => {
   const { settings, owners, updateSettings, updateOwners, resetToInitialSeed, clearDatabase } = useLedger()
@@ -38,6 +38,7 @@ export const SettingsView: React.FC = () => {
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false)
   const [pendingSettings, setPendingSettings] = useState<any | null>(null)
   const [settingsSuccessMsg, setSettingsSuccessMsg] = useState<string | null>(null)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
   const [ownersSuccessMsg, setOwnersSuccessMsg] = useState<string | null>(null)
   const [isSavingOwners, setIsSavingOwners] = useState(false)
 
@@ -65,7 +66,17 @@ export const SettingsView: React.FC = () => {
     const parsedTable = parseRupeesToPaise(tableTargetRupees)
     const parsedFestival = parseRupeesToPaise(festivalTargetRupees)
     const parsedEqual = parseRupeesToPaise(equalThresholdRupees)
-    const parsedAbsent = parseFloat(absentPercentage) / 100
+
+    // Guard the absent-owner percentage: reject NaN/invalid input and clamp to a
+    // sane 0–100% so a blank or bad entry can't poison every owner distribution
+    // (Math.floor(excess * NaN) → NaN) downstream.
+    const absentRaw = parseFloat(absentPercentage)
+    if (!Number.isFinite(absentRaw) || absentRaw < 0 || absentRaw > 100) {
+      setSettingsError('Absent-owner percentage must be a number between 0 and 100.')
+      return
+    }
+    setSettingsError(null)
+    const parsedAbsent = absentRaw / 100
 
     setPendingSettings({
       tableRecoveryTargetPaise: parsedTable,
@@ -181,6 +192,13 @@ export const SettingsView: React.FC = () => {
           <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs font-semibold text-emerald-400 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>{settingsSuccessMsg}</span>
+          </div>
+        )}
+
+        {settingsError && (
+          <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs font-semibold text-rose-400 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{settingsError}</span>
           </div>
         )}
 

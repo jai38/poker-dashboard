@@ -299,7 +299,7 @@ export function calculateLedgerSummary(params: {
       entry: g,
     })),
     ...activeExpenses
-      .filter((e) => e.type === 'monthly_expense')
+      .filter((e) => e.type === 'monthly_expense' || e.type === 'credit_adjustment')
       .map((e) => ({
         type: 'expense' as const,
         date: new Date(e.expenseDate),
@@ -339,6 +339,7 @@ export function calculateLedgerSummary(params: {
       ownerId: o.id,
       equalSharePaise: 0,
       excessSharePaise: 0,
+      tableRecoverySharePaise: 0,
       grossEntitlementPaise: 0,
       cashEntitlementPaise: 0,
       uncollectedEntitlementPaise: 0,
@@ -354,7 +355,7 @@ export function calculateLedgerSummary(params: {
     }
   }
 
-  function creditOwnersEqually(amountPaise: number) {
+  function creditOwnersEqually(amountPaise: number, bucket: 'table' | 'equal' = 'equal') {
     if (amountPaise <= 0 || activeOwners.length === 0) return
     const count = activeOwners.length
     const base = Math.floor(amountPaise / count)
@@ -367,6 +368,7 @@ export function calculateLedgerSummary(params: {
           ownerId: o.id,
           equalSharePaise: 0,
           excessSharePaise: 0,
+          tableRecoverySharePaise: 0,
           grossEntitlementPaise: 0,
           cashEntitlementPaise: 0,
           uncollectedEntitlementPaise: 0,
@@ -381,23 +383,47 @@ export function calculateLedgerSummary(params: {
           tableReservesHeldPaise: 0,
         }
       }
-      ownerEntitlements[o.id].equalSharePaise += share
+      if (bucket === 'table') {
+        ownerEntitlements[o.id].tableRecoverySharePaise += share
+      } else {
+        ownerEntitlements[o.id].equalSharePaise += share
+      }
       ownerEntitlements[o.id].grossEntitlementPaise += share
     }
   }
 
+  // Debits an amount from the owners' entitlement, drawing down each owner's
+  // Debits an amount from the owners' entitlement, drawing down each owner's
+  // distributable profit (equal share, then excess share) first and table-recovery
+  // share last. The debit is spread as equally as possible, but any per-owner
+  // shortfall is carried to the next owner so that the exact total is removed
+  // whenever the owners collectively hold it — this keeps the owner pool and owner
+  // entitlements reconciled to the paise. For every owner the identity
+  // grossEntitlement === tableRecoveryShare + equalShare + excessShare is preserved.
   function debitOwnersEqually(amountPaise: number) {
     if (amountPaise <= 0 || activeOwners.length === 0) return
-    const count = activeOwners.length
-    const base = Math.floor(amountPaise / count)
-    let rem = amountPaise % count
-    for (const o of activeOwners) {
-      const share = base + (rem > 0 ? 1 : 0)
-      if (rem > 0) rem--
-      if (ownerEntitlements[o.id]) {
-        ownerEntitlements[o.id].equalSharePaise = Math.max(0, ownerEntitlements[o.id].equalSharePaise - share)
-        ownerEntitlements[o.id].grossEntitlementPaise = Math.max(0, ownerEntitlements[o.id].grossEntitlementPaise - share)
-      }
+    const list = activeOwners.map((o) => ownerEntitlements[o.id]).filter(Boolean)
+    let remaining = amountPaise
+    for (let i = 0; i < list.length; i++) {
+      if (remaining <= 0) break
+      const ent = list[i]
+      const ownersLeft = list.length - i
+      const want = Math.ceil(remaining / ownersLeft)
+      // All of an owner's entitlement is drawable: profit (equal + excess) first,
+      // then table-recovery reserves. Excluding excess here would leave gross
+      // above the pool and break reconciliation once profit exceeds the equal bucket.
+      const available = ent.equalSharePaise + ent.excessSharePaise + ent.tableRecoverySharePaise
+      const take = Math.min(want, available, remaining)
+      let left = take
+      const fromEqual = Math.min(ent.equalSharePaise, left)
+      ent.equalSharePaise -= fromEqual
+      left -= fromEqual
+      const fromExcess = Math.min(ent.excessSharePaise, left)
+      ent.excessSharePaise -= fromExcess
+      left -= fromExcess
+      ent.tableRecoverySharePaise -= left
+      ent.grossEntitlementPaise = Math.max(0, ent.grossEntitlementPaise - take)
+      remaining -= take
     }
   }
 
@@ -439,47 +465,65 @@ export function calculateLedgerSummary(params: {
         currentFestivalAccumulatedPaise += allocatedToFestivalPaise
         totalDistributableRakePaise += distributableRakePaise
 
-        // Both Table Recovery and Profit reimburse the 4 owners equally
-        creditOwnersEqually(allocatedToTablePaise + distributableRakePaise)
+        // Both Table Recovery and Profit reimburse the owners equally
+        creditOwnersEqually(allocatedToTablePaise, 'table')
+        creditOwnersEqually(distributableRakePaise, 'equal')
       }
     } else if (item.type === 'transfer') {
-      // Reallocate amount between buckets
+      // Reallocate funds between buckets. Only move what is actually available so
+      // the owner pool and owner entitlements stay reconciled to the paise.
       const transfer = item.entry
-      const amt = transfer.amountPaise
+      const requested = transfer.amountPaise
+      let moved = 0
 
-      // Deduct from source bucket
+      // Deduct from source bucket.
       if (transfer.fromBucket === 'table_recovery') {
-        currentTableAccumulatedPaise = Math.max(0, currentTableAccumulatedPaise - amt)
-        debitOwnersEqually(amt)
+        // Table-recovery reserves are owner money; if that bucket is short the
+        // shortfall is drawn from distributable profit (also owner money).
+        const sourceAvailable = currentTableAccumulatedPaise + totalDistributableRakePaise
+        moved = Math.max(0, Math.min(requested, sourceAvailable))
+        const fromTable = Math.min(currentTableAccumulatedPaise, moved)
+        currentTableAccumulatedPaise -= fromTable
+        totalDistributableRakePaise -= moved - fromTable
+        debitOwnersEqually(moved)
       } else if (transfer.fromBucket === 'festival_fund') {
-        currentFestivalAccumulatedPaise = Math.max(0, currentFestivalAccumulatedPaise - amt)
+        // The festival jar is community money and is not credited to owners.
+        moved = Math.max(0, Math.min(requested, currentFestivalAccumulatedPaise))
+        currentFestivalAccumulatedPaise -= moved
       }
 
-      // Add to destination bucket
+      // Add to destination bucket.
       if (transfer.toBucket === 'table_recovery') {
-        currentTableAccumulatedPaise += amt
-        creditOwnersEqually(amt)
+        currentTableAccumulatedPaise += moved
+        creditOwnersEqually(moved, 'table')
       } else if (transfer.toBucket === 'festival_fund') {
-        currentFestivalAccumulatedPaise += amt
+        currentFestivalAccumulatedPaise += moved
       } else if (transfer.toBucket === 'owner_profit') {
-        totalDistributableRakePaise += amt
-        creditOwnersEqually(amt)
+        totalDistributableRakePaise += moved
+        creditOwnersEqually(moved, 'equal')
       }
     } else if (item.type === 'expense') {
-      // General expenses reduce accumulated rake: profit first, then table recovery.
-      // Expenses are NEVER kept in table share, profit, or festival jar.
       const amt = item.entry.amountPaise
-      if (totalDistributableRakePaise >= amt) {
-        totalDistributableRakePaise -= amt
-        debitOwnersEqually(amt)
+      if (item.entry.type === 'credit_adjustment') {
+        // Credits / refunds are income: they flow back into the distributable
+        // owner-profit pool and are shared equally among owners.
+        totalDistributableRakePaise += amt
+        creditOwnersEqually(amt, 'equal')
       } else {
-        const fromProfit = totalDistributableRakePaise
-        totalDistributableRakePaise = 0
-        if (fromProfit > 0) debitOwnersEqually(fromProfit)
+        // General (monthly) expenses reduce accumulated rake: profit first, then
+        // table recovery. Expenses are NEVER kept in table share, profit, or festival jar.
+        if (totalDistributableRakePaise >= amt) {
+          totalDistributableRakePaise -= amt
+          debitOwnersEqually(amt)
+        } else {
+          const fromProfit = totalDistributableRakePaise
+          totalDistributableRakePaise = 0
+          if (fromProfit > 0) debitOwnersEqually(fromProfit)
 
-        const rem = amt - fromProfit
-        currentTableAccumulatedPaise = Math.max(0, currentTableAccumulatedPaise - rem)
-        debitOwnersEqually(rem)
+          const rem = amt - fromProfit
+          currentTableAccumulatedPaise = Math.max(0, currentTableAccumulatedPaise - rem)
+          debitOwnersEqually(rem)
+        }
       }
     } else {
       // Game entry
@@ -520,7 +564,7 @@ export function calculateLedgerSummary(params: {
       totalDistributableRakePaise += distributableRakePaise
 
       // Credit Table Recovery equally to all owners
-      creditOwnersEqually(allocatedToTablePaise)
+      creditOwnersEqually(allocatedToTablePaise, 'table')
 
       let distributions: Record<string, number> = {}
       let equalShare: Record<string, number> = {}
@@ -542,6 +586,7 @@ export function calculateLedgerSummary(params: {
               ownerId,
               equalSharePaise: 0,
               excessSharePaise: 0,
+              tableRecoverySharePaise: 0,
               grossEntitlementPaise: 0,
               cashEntitlementPaise: 0,
               uncollectedEntitlementPaise: 0,

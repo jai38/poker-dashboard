@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
-import { useLedger, Player } from '../../lib/store/ledgerStore'
-import { parseRupeesToPaise, formatINR } from '../../lib/accounting/formatters'
+import { useLedger } from '../../lib/store/ledgerStore'
+import { parseRupeesToPaise, formatINR, localDateInputValue, localDateInputToISO } from '../../lib/accounting/formatters'
 import { AlertTriangle, CheckCircle2, Wallet, ArrowRightLeft, Plus, Trash2, Info } from 'lucide-react'
 
 interface AddPaymentModalProps {
@@ -15,14 +15,14 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   onClose,
   initialPlayerId,
 }) => {
-  const { players, historicalRake, payments, addPayment, transferBetweenMembers, owners, addBucketTransfer } = useLedger()
+  const { players, historicalRake, payments, addPayment, transferBetweenMembers, owners, addBucketTransfer, summary } = useLedger()
 
   const [fundingSource, setFundingSource] = useState<'new_money' | 'member_transfer'>('new_money')
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(initialPlayerId || '')
   const [receivedByOwnerId, setReceivedByOwnerId] = useState<string>(owners[0]?.id || '')
   const [amountRupees, setAmountRupees] = useState<string>('')
   const [festivalRupees, setFestivalRupees] = useState<string>('')
-  const [paidAt, setPaidAt] = useState<string>(new Date().toISOString().split('T')[0])
+  const [paidAt, setPaidAt] = useState<string>(localDateInputValue())
   const [notes, setNotes] = useState<string>('')
   const [error, setError] = useState<string>('')
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -52,7 +52,10 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   const amountPaise = parseRupeesToPaise(amountRupees)
   const festivalPaise = parseRupeesToPaise(festivalRupees)
   const remainingTablePaise = Math.max(0, amountPaise - festivalPaise)
-  const sharePerOwnerPaise = Math.floor(remainingTablePaise / 4)
+  const activeOwnerCount = owners.filter((o) => o.isActive).length || owners.length || 1
+  const sharePerOwnerPaise = Math.floor(remainingTablePaise / activeOwnerCount)
+  // Owner pool available to fund a Festival Jar allocation (table + profit).
+  const availablePoolPaise = summary.tableRecoveryAccumulatedPaise + summary.totalDistributableRakePaise
 
   // Source member allocation computations
   const totalAllocatedPaise = sourceTransfers.reduce(
@@ -104,18 +107,21 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
       return
     }
 
-    if (amountPaise > playerOutstandingPaise) {
-      setError(
-        `Payment (${formatINR(amountPaise)}) exceeds outstanding balance (${formatINR(
-          playerOutstandingPaise
-        )}). Overpayment is not supported in V1.`
-      )
-      return
-    }
-
     if (fundingSource === 'new_money') {
       if (festivalPaise > amountPaise) {
         setError('Festival Jar allocation cannot exceed total payment amount.')
+        return
+      }
+
+      // Pre-validate the Festival Jar allocation against the available owner pool
+      // BEFORE recording the payment, so a failing allocation can't leave an
+      // orphaned payment behind (which previously tempted a duplicate retry).
+      if (festivalPaise > 0 && festivalPaise > availablePoolPaise) {
+        setError(
+          `Festival Jar allocation (${formatINR(festivalPaise)}) exceeds the available owner pool (${formatINR(
+            availablePoolPaise
+          )}). Lower the Festival amount.`
+        )
         return
       }
 
@@ -123,7 +129,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
         await addPayment({
           playerId: selectedPlayerId,
           amountPaise,
-          paidAt: paidAt ? new Date(paidAt).toISOString() : undefined,
+          paidAt: paidAt ? localDateInputToISO(paidAt) : undefined,
           notes: notes.trim(),
           receivedByOwnerId: receivedByOwnerId || undefined,
         })
@@ -136,15 +142,17 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             toBucket: 'festival_fund',
             amountPaise: festivalPaise,
             notes: `Festival Jar allocation from ${selectedPlayer?.name || 'player'} payment (received by ${receiverName})`,
-            transferredAt: paidAt ? new Date(paidAt).toISOString() : undefined,
+            transferredAt: paidAt ? localDateInputToISO(paidAt) : undefined,
             deductedFromOwnerId: receivedByOwnerId || undefined,
           })
         }
 
+        const newRemaining = playerOutstandingPaise - amountPaise
         setSuccessMsg(
-          `Recorded ${formatINR(amountPaise)} payment for ${selectedPlayer?.name} (Received by: ${receiverName}). Remaining outstanding: ${formatINR(
-            playerOutstandingPaise - amountPaise
-          )}.`
+          `Recorded ${formatINR(amountPaise)} payment for ${selectedPlayer?.name} (Received by: ${receiverName}). ` +
+            (newRemaining >= 0
+              ? `Remaining outstanding: ${formatINR(newRemaining)}.`
+              : `Member now holds a credit of ${formatINR(-newRemaining)}.`)
         )
         setTimeout(() => {
           handleResetAndClose()
@@ -189,7 +197,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             fromPlayerId: s.playerId,
             amountPaise: parseRupeesToPaise(s.amountRupees),
           })),
-          transferDate: paidAt ? new Date(paidAt).toISOString() : undefined,
+          transferDate: paidAt ? localDateInputToISO(paidAt) : undefined,
           notes: notes.trim(),
         })
 
@@ -439,7 +447,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
                     <span>How this {formatINR(amountPaise)} is Split</span>
                   </span>
                   <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
-                    Equal 4-Way
+                    Equal {activeOwnerCount}-Way
                   </span>
                 </div>
 

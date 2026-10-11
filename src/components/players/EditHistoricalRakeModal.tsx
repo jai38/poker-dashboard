@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
 import { HistoricalRakeEntry } from '../../lib/accounting/types'
-import { parseRupeesToPaise, formatINR } from '../../lib/accounting/formatters'
+import { parseRupeesToPaise, formatINR, localDateInputToISO } from '../../lib/accounting/formatters'
 import { AlertTriangle, CheckCircle2, Edit3 } from 'lucide-react'
 
 interface EditHistoricalRakeModalProps {
@@ -64,7 +64,7 @@ export const EditHistoricalRakeModal: React.FC<EditHistoricalRakeModalProps> = (
       await editHistoricalRake(rakeEntry.id, {
         playerId,
         amountPaise: parsedPaise,
-        entryDate: entryDate ? new Date(entryDate).toISOString() : undefined,
+        entryDate: entryDate ? localDateInputToISO(entryDate) : undefined,
         notes: notes.trim(),
       })
 

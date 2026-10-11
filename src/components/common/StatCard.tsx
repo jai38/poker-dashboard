@@ -34,7 +34,9 @@ export const StatCard: React.FC<StatCardProps> = ({
   }[badge?.variant || 'slate']
 
   const progressPercent = progress
-    ? Math.min(100, Math.round((progress.current / progress.target) * 100))
+    ? progress.target > 0
+      ? Math.min(100, Math.round((progress.current / progress.target) * 100))
+      : 100
     : 0
 
   return (
