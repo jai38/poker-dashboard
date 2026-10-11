@@ -276,6 +276,41 @@ async function insertBucketTransferResilient(client: SupabaseClient, row: any) {
   return { error }
 }
 
+async function insertRakeEntryResilient(client: SupabaseClient, row: any) {
+  const { error } = await client.from('rake_entries').upsert(row)
+  if (!error) return { error: null }
+
+  // If check constraint 23514 fails on negative amount, encode negative amount into notes and store 0 in amount_paise
+  if (error.code === '23514' && row.amount_paise < 0) {
+    console.warn('rake_entries check constraint violated for negative fee. Retrying with fallback zero amount and encoded note:', error.message)
+    const tag = `[neg_amount:${row.amount_paise}]`
+    const fallback = {
+      ...row,
+      amount_paise: 0,
+      notes: row.notes ? `${tag} ${row.notes}` : tag,
+    }
+    return await client.from('rake_entries').upsert(fallback)
+  }
+  return { error }
+}
+
+async function updateRakeEntryResilient(client: SupabaseClient, rakeId: string, row: any) {
+  const { error } = await client.from('rake_entries').update(row).eq('id', rakeId)
+  if (!error) return { error: null }
+
+  if (error.code === '23514' && row.amount_paise < 0) {
+    console.warn('rake_entries check constraint violated for negative fee update. Retrying with fallback zero amount and encoded note:', error.message)
+    const tag = `[neg_amount:${row.amount_paise}]`
+    const fallback = {
+      ...row,
+      amount_paise: 0,
+      notes: row.notes ? `${tag} ${row.notes}` : tag,
+    }
+    return await client.from('rake_entries').update(fallback).eq('id', rakeId)
+  }
+  return { error }
+}
+
 function generateInitialSeedState() {
   const initialPlayers: Player[] = INITIAL_SEED_PLAYERS.map((p) => ({
     id: p.id,
@@ -518,19 +553,72 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setGames(loadedGames)
       }
 
-      let loadedRake: HistoricalRakeEntry[] = []
+      let loadedRake: HistoricalRakeEntry[] = historicalRake
       if (dbRake) {
-        loadedRake = dbRake.map((r: any) => ({
-          id: r.id,
-          playerId: r.player_id,
-          gameId: r.game_id || undefined,
-          entryType: r.entry_type || 'historical',
-          amountPaise: Number(r.amount_paise),
-          entryDate: r.entry_date,
-          status: r.status,
-          notes: r.notes,
-          voidReason: r.void_reason,
-        }))
+        let currentLocalHistorical: HistoricalRakeEntry[] = historicalRake
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY)
+          if (raw) {
+            const parsed = JSON.parse(raw)
+            if (Array.isArray(parsed.historicalRake)) {
+              currentLocalHistorical = parsed.historicalRake
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        loadedRake = dbRake.map((r: any) => {
+          let amt = Number(r.amount_paise)
+          let cleanNotes = r.notes
+
+          // Decode negative amount if stored in notes due to DB constraint
+          if (cleanNotes && cleanNotes.includes('[neg_amount:')) {
+            const match = cleanNotes.match(/\[neg_amount:(-?\d+)\]/)
+            if (match && match[1]) {
+              amt = Number(match[1])
+              cleanNotes = cleanNotes.replace(/\[neg_amount:-?\d+\]\s*/, '').trim() || null
+            }
+          }
+
+          // If local copy had a negative amount and DB has 0, keep local negative amount
+          const localMatch = currentLocalHistorical.find((lh) => lh.id === r.id)
+          if (amt === 0 && localMatch && localMatch.amountPaise < 0) {
+            amt = localMatch.amountPaise
+          }
+
+          return {
+            id: r.id,
+            playerId: r.player_id,
+            gameId: r.game_id || undefined,
+            entryType: r.entry_type || 'historical',
+            amountPaise: amt,
+            entryDate: r.entry_date,
+            status: r.status,
+            notes: cleanNotes || r.notes,
+            voidReason: r.void_reason,
+          }
+        })
+
+        // Preserve any unsynced local historical rake entries (e.g. if DB insert failed on reload)
+        const dbIds = new Set(dbRake.map((r: any) => r.id))
+        const unsyncedRake = currentLocalHistorical.filter((lh) => !dbIds.has(lh.id))
+        if (unsyncedRake.length > 0) {
+          loadedRake = [...loadedRake, ...unsyncedRake]
+          for (const ur of unsyncedRake) {
+            insertRakeEntryResilient(supabase, {
+              id: ur.id,
+              player_id: ur.playerId,
+              amount_paise: ur.amountPaise,
+              entry_type: ur.entryType || 'historical',
+              entry_date: ur.entryDate,
+              notes: ur.notes,
+              status: ur.status || 'active',
+              void_reason: ur.voidReason,
+            })
+          }
+        }
+
         setHistoricalRake(loadedRake)
       }
 
@@ -1242,7 +1330,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       }
 
-      const { error: rErr } = await client.from('rake_entries').insert({
+      await insertRakeEntryResilient(client, {
         id: newRake.id,
         player_id: newRake.playerId,
         amount_paise: newRake.amountPaise,
@@ -1251,9 +1339,6 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         notes: newRake.notes,
         status: 'active',
       })
-      if (rErr) {
-        console.warn('Rake entry insert error in addHistoricalRake:', rErr)
-      }
 
       if (newPayment) {
         const row = {
@@ -1304,12 +1389,12 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     persist({ historicalRake: updatedList })
 
     safeSupabaseOp(async (client) => {
-      await client.from('rake_entries').update({
+      await updateRakeEntryResilient(client, rakeId, {
         player_id: updatedRake.playerId,
         amount_paise: updatedRake.amountPaise,
         entry_date: updatedRake.entryDate,
         notes: updatedRake.notes,
-      }).eq('id', rakeId)
+      })
     })
 
     addAudit('FEE_ENTRY_UPDATED', 'historical_rake', rakeId, {
@@ -1483,7 +1568,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     safeSupabaseOp(async (client) => {
       for (const r of newRakes) {
-        await client.from('rake_entries').insert({
+        await insertRakeEntryResilient(client, {
           id: r.id,
           player_id: r.playerId,
           amount_paise: r.amountPaise,
@@ -2334,18 +2419,18 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // 4. Sync historical rake
     if (historicalRake.length > 0) {
-      await client.from('rake_entries').upsert(
-        historicalRake.map((r) => ({
+      for (const r of historicalRake) {
+        await insertRakeEntryResilient(client, {
           id: r.id,
           player_id: r.playerId,
           amount_paise: r.amountPaise,
-          entry_type: 'historical',
+          entry_type: r.entryType || 'historical',
           entry_date: r.entryDate,
           notes: r.notes,
           status: r.status,
           void_reason: r.voidReason,
-        }))
-      )
+        })
+      }
     }
 
     // 5. Sync payments

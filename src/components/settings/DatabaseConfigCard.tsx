@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS rake_entries (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     player_id TEXT NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
     game_id TEXT REFERENCES games(id) ON DELETE SET NULL,
-    amount_paise BIGINT NOT NULL CHECK (amount_paise >= 0),
+    amount_paise BIGINT NOT NULL, -- Supports both positive fees and negative discounts/rebates
     entry_type TEXT NOT NULL DEFAULT 'historical' CHECK (entry_type IN ('game', 'historical')),
     entry_date TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     notes TEXT,
@@ -176,7 +176,11 @@ INSERT INTO owners (id, name, is_active) VALUES
 ('owner-2', 'Owner 2', true),
 ('owner-3', 'Owner 3', true),
 ('owner-4', 'Owner 4', true)
-ON CONFLICT (id) DO NOTHING;`
+ON CONFLICT (id) DO NOTHING;
+
+-- MIGRATIONS FOR EXISTING DATABASES:
+ALTER TABLE rake_entries DROP CONSTRAINT IF EXISTS rake_entries_amount_paise_check;
+ALTER TABLE bucket_transfers ADD COLUMN IF NOT EXISTS deducted_from_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;`
 
 export const DatabaseConfigCard: React.FC = () => {
   const currentConfig = getSupabaseConfig()

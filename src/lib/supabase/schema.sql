@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS rake_entries (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     player_id TEXT NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
     game_id TEXT REFERENCES games(id) ON DELETE SET NULL,
-    amount_paise BIGINT NOT NULL CHECK (amount_paise >= 0),
+    amount_paise BIGINT NOT NULL, -- Supports both positive fees and negative discounts/rebates
     entry_type TEXT NOT NULL DEFAULT 'historical' CHECK (entry_type IN ('game', 'historical')),
     entry_date TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     notes TEXT,
@@ -191,6 +191,12 @@ INSERT INTO owners (id, name, is_active) VALUES
 ('owner-3', 'Owner 3', true),
 ('owner-4', 'Owner 4', true)
 ON CONFLICT (id) DO NOTHING;
+
+-- MIGRATIONS FOR EXISTING DATABASES:
+-- 1. Allow negative rake entries for member fee discounts and rebates:
+ALTER TABLE rake_entries DROP CONSTRAINT IF EXISTS rake_entries_amount_paise_check;
+-- 2. Add owner custody column to bucket transfers:
+ALTER TABLE bucket_transfers ADD COLUMN IF NOT EXISTS deducted_from_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
 
 -- SCRIPT TO WIPE ALL LEDGER ENTRIES IF NEEDED:
 -- TRUNCATE TABLE payments, rake_entries, expenses, owner_settlements, game_owners, games, bucket_transfers, players CASCADE;
