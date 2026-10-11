@@ -59,3 +59,25 @@ export function formatDateTime(date: string | Date | number): string {
     minute: '2-digit',
   }).format(d)
 }
+
+/**
+ * Returns the current local wall-clock time as a value for an
+ * `<input type="datetime-local">` (YYYY-MM-DDTHH:mm), not UTC.
+ */
+export function localDateTimeInputValue(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  )
+}
+
+/**
+ * Returns the current local calendar date as a value for an
+ * `<input type="date">` (YYYY-MM-DD), not UTC — avoids off-by-one-day
+ * defaults for entries made before the UTC offset rolls over.
+ */
+export function localDateInputValue(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}

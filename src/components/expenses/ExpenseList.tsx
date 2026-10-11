@@ -4,7 +4,7 @@ import { formatINR, formatDate } from '../../lib/accounting/formatters'
 import { AddExpenseModal } from './AddExpenseModal'
 import { EditExpenseModal } from './EditExpenseModal'
 import { ConfirmDialog } from '../common/ConfirmDialog'
-import { Receipt, PlusCircle, Ban, AlertCircle, Pencil, Trash2 } from 'lucide-react'
+import { Receipt, PlusCircle, Ban, Pencil, Trash2 } from 'lucide-react'
 import { GeneralExpense } from '../../lib/accounting/types'
 
 export const ExpenseList: React.FC = () => {

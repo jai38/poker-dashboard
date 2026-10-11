@@ -85,6 +85,7 @@ export interface PlayerPayment {
   receivedByOwnerId?: string // Partner who collected this payment (UPI/Cash/Account)
   paymentType?: 'direct' | 'member_transfer'
   transferSourcePlayerId?: string
+  gameId?: string // Set for "paid on the spot" payments created with a game
 }
 
 export interface GeneralExpense {
@@ -209,6 +210,7 @@ export interface LedgerSummary {
     ownerId: string
     equalSharePaise: number
     excessSharePaise: number
+    tableRecoverySharePaise: number
     grossEntitlementPaise: number
     cashEntitlementPaise: number
     uncollectedEntitlementPaise: number

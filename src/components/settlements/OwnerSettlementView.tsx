@@ -13,7 +13,6 @@ import {
   Users,
   ArrowRightLeft,
   Wallet,
-  PiggyBank,
   TrendingUp,
   TrendingDown,
   ArrowDownLeft,
@@ -261,12 +260,12 @@ export const OwnerSettlementView: React.FC = () => {
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {summary.recommendedTransfers.map((t, idx) => {
+            {summary.recommendedTransfers.map((t) => {
               const fromOwner = owners.find((o) => o.id === t.fromOwnerId)
               const toOwner = owners.find((o) => o.id === t.toOwnerId)
               return (
                 <div
-                  key={idx}
+                  key={`${t.fromOwnerId}-${t.toOwnerId}-${t.amountPaise}`}
                   className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 hover:border-indigo-500/50 transition-colors flex flex-col justify-between gap-3 shadow-inner"
                 >
                   <div className="flex items-center justify-between">
@@ -560,7 +559,6 @@ export const OwnerSettlementView: React.FC = () => {
 
         {owners.map((owner) => {
           const ent = summary.ownerEntitlements[owner.id]
-          const remaining = ent?.remainingEntitlementPaise || 0
           const netCashHeld = ent?.netCashHeldPaise || 0
           const netPosition = ent?.netPositionPaise || 0
 

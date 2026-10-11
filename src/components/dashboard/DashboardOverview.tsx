@@ -42,10 +42,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     amountPaise?: number
   }>({ isOpen: false })
 
-  const tablePercent = Math.min(
-    100,
-    Math.round((summary.tableRecoveryAccumulatedPaise / summary.tableRecoveryTargetPaise) * 100)
-  )
+  const tablePercent =
+    summary.tableRecoveryTargetPaise > 0
+      ? Math.min(
+          100,
+          Math.round((summary.tableRecoveryAccumulatedPaise / summary.tableRecoveryTargetPaise) * 100)
+        )
+      : 100
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
@@ -395,7 +398,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 <tbody className="divide-y divide-slate-800/60 font-mono text-xs">
                   {owners.map((owner) => {
                     const ent = summary.ownerEntitlements[owner.id]
-                    const tableShare = Math.floor(summary.tableRecoveryAccumulatedPaise / 4)
+                    const tableShare = ent?.tableRecoverySharePaise || 0
                     const profitShare = (ent?.equalSharePaise || 0) + (ent?.excessSharePaise || 0)
                     return (
                       <tr key={owner.id} className="hover:bg-slate-800/30">
@@ -422,10 +425,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   <tr className="border-t border-slate-800 font-bold text-xs">
                     <td className="py-3 font-sans text-slate-300">Total</td>
                     <td className="py-3 text-right font-mono text-amber-400">
-                      {formatINR(summary.tableRecoveryAccumulatedPaise)}
+                      {formatINR(owners.reduce((s, o) => s + (summary.ownerEntitlements[o.id]?.tableRecoverySharePaise || 0), 0))}
                     </td>
                     <td className="py-3 text-right font-mono text-slate-300">
-                      {formatINR(summary.totalDistributableRakePaise)}
+                      {formatINR(owners.reduce((s, o) => {
+                        const e = summary.ownerEntitlements[o.id]
+                        return s + (e?.equalSharePaise || 0) + (e?.excessSharePaise || 0)
+                      }, 0))}
                     </td>
                     <td className="py-3 text-right font-mono text-emerald-400">
                       {formatINR(summary.totalOwnerEntitlementPaise)}
@@ -445,7 +451,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               {owners.map((owner) => {
                 const ent = summary.ownerEntitlements[owner.id]
                 const gross = ent?.grossEntitlementPaise || 0
-                const tableShare = Math.floor(summary.tableRecoveryAccumulatedPaise / 4)
+                const tableShare = ent?.tableRecoverySharePaise || 0
                 const profitShare = (ent?.equalSharePaise || 0) + (ent?.excessSharePaise || 0)
                 return (
                   <div

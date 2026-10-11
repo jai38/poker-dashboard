@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
-import { parseRupeesToPaise, formatINR } from '../../lib/accounting/formatters'
+import { parseRupeesToPaise, localDateInputValue } from '../../lib/accounting/formatters'
 import { AlertTriangle } from 'lucide-react'
 
 interface AddExpenseModalProps {
@@ -12,21 +12,21 @@ interface AddExpenseModalProps {
 export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClose }) => {
   const { games, addExpense, owners } = useLedger()
 
-  const [type, setType] = useState<'monthly_expense' | 'credit_adjustment' | 'session_expense'>(
-    'monthly_expense'
-  )
+  const [type, setType] = useState<'monthly_expense' | 'credit_adjustment'>('monthly_expense')
   const [description, setDescription] = useState('')
   const [amountRupees, setAmountRupees] = useState('')
   const [paidByOwnerId, setPaidByOwnerId] = useState<string>('')
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0])
+  const [expenseDate, setExpenseDate] = useState(localDateInputValue())
   const [gameId, setGameId] = useState<string>('')
   const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const amountPaise = parseRupeesToPaise(amountRupees)
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    if (isSubmitting) return
 
     if (!description.trim()) {
       setError('Description is required.')
@@ -39,6 +39,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
     }
 
     try {
+      setIsSubmitting(true)
       await addExpense({
         type,
         amountPaise,
@@ -50,6 +51,8 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
       handleResetAndClose()
     } catch (err: any) {
       setError(err.message || 'Failed to record expense.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -84,8 +87,12 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
           >
             <option value="monthly_expense">Monthly / General Expense (e.g. Utilities, Equipment supplies)</option>
             <option value="credit_adjustment">Credit / Adjustment (e.g. Deposit refund, Organizer reimbursement)</option>
-            <option value="session_expense">Session Expense</option>
           </select>
+          <p className="text-[11px] text-slate-400">
+            A <span className="text-slate-300">Credit / Adjustment</span> adds money back into the owner profit pool; a{' '}
+            <span className="text-slate-300">Monthly / General Expense</span> draws it down. Per-session expenses are
+            recorded on the session itself.
+          </p>
         </div>
 
         {/* Description */}
@@ -191,9 +198,10 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({ isOpen, onClos
           </button>
           <button
             type="submit"
-            className="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors shadow-sm"
+            disabled={isSubmitting}
+            className="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Save Entry
+            {isSubmitting ? 'Saving…' : 'Save Entry'}
           </button>
         </div>
       </form>

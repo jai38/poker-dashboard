@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
-import { parseRupeesToPaise, formatINR } from '../../lib/accounting/formatters'
+import { parseRupeesToPaise, formatINR, localDateInputValue } from '../../lib/accounting/formatters'
 import { CheckCircle2, AlertTriangle } from 'lucide-react'
 
 interface QuickHistoricalRakeModalProps {
@@ -22,9 +22,10 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
   const [rakeRupees, setRakeRupees] = useState<string>('')
   const [paidRupees, setPaidRupees] = useState<string>('')
   const [receivedByOwnerId, setReceivedByOwnerId] = useState<string>(owners[0]?.id || '')
-  const [entryDate, setEntryDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [entryDate, setEntryDate] = useState<string>(localDateInputValue())
   const [notes, setNotes] = useState<string>('Previous sessions')
   const [error, setError] = useState<string>('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [savedSuccess, setSavedSuccess] = useState<any | null>(null)
 
   const rakePaise = parseRupeesToPaise(rakeRupees)
@@ -33,6 +34,7 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    if (isSubmitting) return
 
     if (rakePaise === 0) {
       setError('Fee amount cannot be zero. Enter a positive amount for fees or negative (e.g. -500) for discounts/rebates.')
@@ -55,6 +57,7 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
     }
 
     try {
+      setIsSubmitting(true)
       await addHistoricalRake({
         playerId: selectedPlayerId || undefined,
         playerName: selectedPlayerId ? undefined : newPlayerName.trim(),
@@ -78,6 +81,8 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
       })
     } catch (err: any) {
       setError(err.message || 'Failed to save fee entry.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -316,9 +321,10 @@ export const QuickHistoricalRakeModal: React.FC<QuickHistoricalRakeModalProps> =
           </button>
           <button
             type="submit"
-            className="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors shadow-sm"
+            disabled={isSubmitting}
+            className="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Save Fee Entry
+            {isSubmitting ? 'Saving…' : 'Save Fee Entry'}
           </button>
         </div>
       </form>

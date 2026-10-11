@@ -4,8 +4,8 @@ import { useLedger } from '../../lib/store/ledgerStore'
 
 export const LoginPage: React.FC = () => {
   const { signIn, isOnlineMode } = useLedger()
-  const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('AdminPass2026!')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -17,19 +17,13 @@ export const LoginPage: React.FC = () => {
     try {
       const { error: authError } = await signIn(username.trim(), password)
       if (authError) {
-        setError(authError.message || 'Invalid username or password.')
+        setError(authError.message || 'Invalid email or password.')
       }
     } catch (err: any) {
       setError(err.message || 'Authentication error. Please try again.')
     } finally {
       setLoading(false)
     }
-  }
-
-  const fillCredentials = () => {
-    setUsername('admin')
-    setPassword('AdminPass2026!')
-    setError('')
   }
 
   return (
@@ -53,7 +47,7 @@ export const LoginPage: React.FC = () => {
           <div className="flex items-center justify-between pb-5 border-b border-slate-800/80 mb-6">
             <div className="flex items-center gap-2">
               <KeyRound className="w-4 h-4 text-indigo-400" />
-              <span className="text-sm font-semibold text-slate-200">Admin Sign In</span>
+              <span className="text-sm font-semibold text-slate-200">Sign In</span>
             </div>
             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
               {isOnlineMode ? 'Cloud Mode' : 'Local Storage Mode'}
@@ -70,17 +64,18 @@ export const LoginPage: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                Admin Username or Email
+                Email
               </label>
               <div className="relative">
                 <User className="w-4 h-4 text-slate-500 absolute left-3 top-3 pointer-events-none" />
                 <input
-                  type="text"
+                  type="email"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="admin"
+                  placeholder="you@example.com"
                   required
                   autoFocus
+                  autoComplete="email"
                   className="w-full pl-9 pr-3.5 py-2.5 text-xs bg-slate-950/80 border border-slate-800 rounded-xl text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
                 />
               </div>
@@ -98,6 +93,7 @@ export const LoginPage: React.FC = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
                   required
+                  autoComplete="current-password"
                   className="w-full pl-9 pr-3.5 py-2.5 text-xs bg-slate-950/80 border border-slate-800 rounded-xl text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
                 />
               </div>
@@ -119,23 +115,13 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick-fill helper banner */}
+          {/* Access note */}
           <div className="mt-6 pt-5 border-t border-slate-800/80">
-            <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl flex items-center justify-between text-[11px]">
-              <div className="text-slate-400">
-                <span className="font-semibold text-slate-300">Default Credentials:</span>
-                <div className="mt-0.5 font-mono text-[10px] text-slate-500">
-                  user: <span className="text-indigo-400">admin</span> · pass: <span className="text-indigo-400">AdminPass2026!</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={fillCredentials}
-                className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 px-2.5 py-1 rounded-md border border-indigo-500/20 transition-colors"
-              >
-                Auto-fill
-              </button>
-            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Sign in with the email and password for your ledger account. Accounts
+              are managed by the table organizer in Supabase — contact them if you
+              need access or a password reset.
+            </p>
           </div>
         </div>
 

@@ -1,4 +1,4 @@
-import { Owner, AccountingSettings, DEFAULT_ACCOUNTING_SETTINGS } from '../accounting/types'
+import { Owner } from '../accounting/types'
 
 export interface SeedPlayer {
   id: string

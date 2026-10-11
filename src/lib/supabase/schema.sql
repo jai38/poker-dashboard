@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS bucket_transfers (
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'voided')),
     void_reason TEXT,
+    deducted_from_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
@@ -62,11 +63,12 @@ CREATE TABLE IF NOT EXISTS rake_entries (
     player_id TEXT NOT NULL REFERENCES players(id) ON DELETE RESTRICT,
     game_id TEXT REFERENCES games(id) ON DELETE SET NULL,
     amount_paise BIGINT NOT NULL, -- Supports both positive fees and negative discounts/rebates
-    entry_type TEXT NOT NULL DEFAULT 'historical' CHECK (entry_type IN ('game', 'historical')),
+    entry_type TEXT NOT NULL DEFAULT 'historical' CHECK (entry_type IN ('game', 'historical', 'member_transfer')),
     entry_date TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     notes TEXT,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'voided')),
     void_reason TEXT,
+    transfer_target_player_id TEXT REFERENCES players(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
@@ -80,6 +82,9 @@ CREATE TABLE IF NOT EXISTS payments (
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'voided')),
     void_reason TEXT,
     received_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL,
+    payment_type TEXT NOT NULL DEFAULT 'direct' CHECK (payment_type IN ('direct', 'member_transfer')),
+    transfer_source_player_id TEXT REFERENCES players(id) ON DELETE SET NULL,
+    game_id TEXT REFERENCES games(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
@@ -112,9 +117,16 @@ CREATE TABLE IF NOT EXISTS owner_settlements (
 
 -- Safe idempotent migrations for existing databases:
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS received_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS payment_type TEXT NOT NULL DEFAULT 'direct';
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS transfer_source_player_id TEXT REFERENCES players(id) ON DELETE SET NULL;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS game_id TEXT REFERENCES games(id) ON DELETE SET NULL;
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS paid_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
 ALTER TABLE owner_settlements ADD COLUMN IF NOT EXISTS paid_by_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
 ALTER TABLE bucket_transfers ADD COLUMN IF NOT EXISTS deducted_from_owner_id TEXT REFERENCES owners(id) ON DELETE SET NULL;
+ALTER TABLE rake_entries ADD COLUMN IF NOT EXISTS transfer_target_player_id TEXT REFERENCES players(id) ON DELETE SET NULL;
+-- Allow member-to-member transfer rake entries (previously only 'game'/'historical' were permitted):
+ALTER TABLE rake_entries DROP CONSTRAINT IF EXISTS rake_entries_entry_type_check;
+ALTER TABLE rake_entries ADD CONSTRAINT rake_entries_entry_type_check CHECK (entry_type IN ('game', 'historical', 'member_transfer'));
 
 -- 10. SETTINGS TABLE
 CREATE TABLE IF NOT EXISTS settings (
@@ -135,7 +147,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 -- ==========================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
--- Allows both anon (frontend app) and authenticated users access
+-- Only signed-in (authenticated) users may read or write the ledger.
+-- The public anon key shipped in the client can therefore do nothing until a
+-- partner signs in with a real Supabase Auth account.
 -- ==========================================
 
 ALTER TABLE owners ENABLE ROW LEVEL SECURITY;
@@ -159,7 +173,8 @@ BEGIN
         AND tablename IN ('owners', 'players', 'games', 'game_owners', 'rake_entries', 'payments', 'expenses', 'owner_settlements', 'bucket_transfers', 'settings', 'audit_log')
     LOOP
         EXECUTE format('DROP POLICY IF EXISTS "Allow shared ledger access" ON %I;', tbl);
-        EXECUTE format('CREATE POLICY "Allow shared ledger access" ON %I FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);', tbl);
+        EXECUTE format('DROP POLICY IF EXISTS "Authenticated ledger access" ON %I;', tbl);
+        EXECUTE format('CREATE POLICY "Authenticated ledger access" ON %I FOR ALL TO authenticated USING (true) WITH CHECK (true);', tbl);
     END LOOP;
 END $$;
 

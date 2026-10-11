@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { useLedger } from '../../lib/store/ledgerStore'
-import { parseRupeesToPaise, formatINR } from '../../lib/accounting/formatters'
-import { AlertTriangle, Scale } from 'lucide-react'
+import { parseRupeesToPaise, formatINR, localDateInputValue } from '../../lib/accounting/formatters'
+import { AlertTriangle } from 'lucide-react'
 
 interface RecordSettlementModalProps {
   isOpen: boolean
@@ -26,13 +26,14 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
   const [amountRupees, setAmountRupees] = useState<string>(
     initialAmountPaise ? (initialAmountPaise / 100).toString() : ''
   )
-  const [settledAt, setSettledAt] = useState<string>(new Date().toISOString().split('T')[0])
+  const [settledAt, setSettledAt] = useState<string>(localDateInputValue())
   const [notes, setNotes] = useState<string>(
     initialPayerId
       ? `P2P transfer from ${owners.find((o) => o.id === initialPayerId)?.name || 'Organizer'}`
       : ''
   )
   const [error, setError] = useState<string>('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const selectedOwner = owners.find((o) => o.id === selectedOwnerId)
   const ownerEnt = selectedOwnerId ? summary.ownerEntitlements[selectedOwnerId] : null
@@ -46,6 +47,7 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    if (isSubmitting) return
 
     if (!selectedOwnerId) {
       setError('Please select an organizer.')
@@ -57,18 +59,19 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
       return
     }
 
-    const maxAllowedPaise = Math.max(remainingPaise, ownerEnt?.netPositionPaise || 0)
-
-    if (maxAllowedPaise > 0 && amountPaise > maxAllowedPaise) {
+    // The store settles against cash-based remaining entitlement, so cap here to
+    // the same figure to avoid prefilled recommendations being rejected downstream.
+    if (remainingPaise > 0 && amountPaise > remainingPaise) {
       setError(
-        `Settlement amount (${formatINR(amountPaise)}) exceeds organizer's receivable balance (${formatINR(
-          maxAllowedPaise
+        `Settlement amount (${formatINR(amountPaise)}) exceeds organizer's remaining entitlement (${formatINR(
+          remainingPaise
         )}).`
       )
       return
     }
 
     try {
+      setIsSubmitting(true)
       await recordOwnerSettlement({
         ownerId: selectedOwnerId,
         amountPaise,
@@ -79,6 +82,8 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
       handleResetAndClose()
     } catch (err: any) {
       setError(err.message || 'Failed to record organizer settlement.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -239,10 +244,10 @@ export const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({
           </button>
           <button
             type="submit"
-            disabled={remainingPaise === 0}
-            className="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white transition-colors shadow-sm"
+            disabled={isSubmitting || remainingPaise === 0}
+            className="px-5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors shadow-sm"
           >
-            Record Settlement
+            {isSubmitting ? 'Recording…' : 'Record Settlement'}
           </button>
         </div>
       </form>
